@@ -148,8 +148,13 @@ export function InsightsPage({ sessions }: { sessions: SavedSession[] }) {
   </div>
 }
 
-export function RecommendationsPage({ sessions, onStart }: { sessions: SavedSession[]; onStart: (mode: 'student' | 'developer') => void }) {
+export function RecommendationsPage({ sessions, mode = 'student', onStart }: {
+  sessions: SavedSession[]
+  mode?: 'student' | 'developer'
+  onStart: (mode: 'student' | 'developer') => void
+}) {
   const latest = [...sessions].sort((a, b) => b.sessionDate.localeCompare(a.sessionDate))[0]
+  const targetMode = mode ?? latest?.mode ?? 'student'
   const suggestions = [
     { icon: MoonStar, title: 'Make room for rest', body: latest && latest.sleepHours < 7 ? `You logged ${latest.sleepHours} hours of sleep before your last session. If it fits your day, a little extra rest may help.` : 'A consistent wind-down can make it easier to arrive at tomorrow with a clearer head.', tone: 'lavender' },
     { icon: SunMedium, title: 'Let the break be a break', body: latest ? `Your last session included a ${latest.breakMinutes}-minute pause. Try standing up, stretching, or looking away from the screen.` : 'A short stretch or a glass of water can be a good reset between focus blocks.', tone: 'peach' },
@@ -157,8 +162,8 @@ export function RecommendationsPage({ sessions, onStart }: { sessions: SavedSess
   ]
   return <div className="content-page">
     <div className="page-title-row"><div><span className="eyebrow">A KINDER KIND OF NUDGE</span><h1>Recovery notes</h1><p>Practical ideas, never medical advice or a grade.</p></div><span className="recovery-badge"><Heart size={14} /> Care over output</span></div>
-    <div className="recommendation-grid">{suggestions.map(({ icon: Icon, title, body, tone }) => <article className={`recommendation-card ${tone}`} key={title}><span className="recommendation-icon"><Icon size={19} /></span><span className="eyebrow">A SMALL SUGGESTION</span><h2>{title}</h2><p>{body}</p><span className="recommendation-foot"><Check size={13} /> Take what helps, leave the rest.</span></article>)}</div>
-    <section className="panel recommendation-cta"><div><span className="eyebrow">READY WHEN YOU ARE</span><h2>Start with a manageable block.</h2><p>Choose a focus session that fits the energy you have today.</p></div><button type="button" className="button-primary" onClick={() => onStart(latest?.mode ?? 'student')}><Clock3 size={16} /> Set up a session <ArrowRight size={15} /></button></section>
+    <div className="recommendation-grid">{suggestions.map(({ icon: Icon, title, body, tone }) => <article className={`recommendation-card ${tone}`} key={title} onClick={() => onStart(targetMode)} style={{ cursor: 'pointer' }}><span className="recommendation-icon"><Icon size={19} /></span><span className="eyebrow">A SMALL SUGGESTION</span><h2>{title}</h2><p>{body}</p><span className="recommendation-foot"><Check size={13} /> Take what helps, leave the rest.</span></article>)}</div>
+    <section className="panel recommendation-cta"><div><span className="eyebrow">READY WHEN YOU ARE</span><h2>Start with a manageable block.</h2><p>Choose a focus session that fits the energy you have today.</p></div><button type="button" className="button-primary" onClick={() => onStart(targetMode)}><Clock3 size={16} /> Set up a session <ArrowRight size={15} /></button></section>
     <p className="medical-note"><ShieldCheck size={15} /> Burnout Radarr offers an experimental wellness estimate for reflection only. It does not diagnose, treat, or replace professional care.</p>
   </div>
 }

@@ -329,6 +329,7 @@ function App() {
   function resetSettings() {
     if (!window.confirm('Restore the original mode, theme, and timer defaults? Your sessions will remain.')) return
     setData((current) => ({ ...current, preferences: { ...DEFAULT_PREFERENCES } }))
+    setActiveMode(DEFAULT_PREFERENCES.defaultMode)
     setToast('Settings restored.')
   }
 
@@ -388,12 +389,17 @@ function App() {
           onDeleteWorkLog={deleteWorkLog}
         /> : page === 'sessions' ? <HistoryPage sessions={data.sessions} onOpenSession={setSelectedSession} />
           : page === 'insights' ? <InsightsPage sessions={data.sessions} />
-            : page === 'recommendations' ? <RecommendationsPage sessions={data.sessions} onStart={(mode) => setSetupMode(mode)} />
+            : page === 'recommendations' ? <RecommendationsPage sessions={data.sessions} mode={currentMode} onStart={(mode) => setSetupMode(mode || currentMode)} />
               : <SettingsPage
                 preferences={data.preferences}
                 sessions={data.sessions}
                 user={currentUser}
-                onChange={(patch: Partial<AppPreferences>) => setData((current) => ({ ...current, preferences: { ...current.preferences, ...patch } }))}
+                onChange={(patch: Partial<AppPreferences>) => {
+                  setData((current) => ({ ...current, preferences: { ...current.preferences, ...patch } }))
+                  if (patch.defaultMode) {
+                    setActiveMode(patch.defaultMode)
+                  }
+                }}
                 onResetSettings={resetSettings}
                 onResetData={resetData}
                 onSave={() => setToast('Settings saved on this device.')}
