@@ -22,6 +22,7 @@ import {
 import type { AppPage, ProjectItem, SavedSession, StudyTask, WorkLogItem } from '../services/app-state'
 import { ActivityChart, SubjectChart } from './DashboardCharts'
 import type { ActivityPoint, SlicePoint } from './Charts'
+import { useActivityTracker } from '../hooks/useActivityTracker';
 
 interface DashboardProps {
   view: 'overview' | 'student' | 'developer'
@@ -220,6 +221,53 @@ function WorkLogPreview({ logs, onAdd, onEdit, onDelete }: { logs: WorkLogItem[]
   </section>
 }
 
+function ActivityTestWidget() {
+  const { kpm, cpm, metrics, isTracking } = useActivityTracker({ autoStart: true });
+
+  return (
+    <section className="panel activity-test-panel bg-white rounded-3xl p-6 shadow-sm border-0" style={{ gridColumn: '1 / -1' }}>
+      <div className="panel-heading mb-6 flex items-center justify-between">
+        <div>
+          <span className="eyebrow text-xs uppercase tracking-wider text-slate-400 font-medium">REAL-TIME INPUT STREAM</span>
+          <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100 mt-0.5">Activity Tracker (Developer Test)</h2>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${isTracking ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400' : 'bg-slate-100 text-slate-600'}`}>
+            <span className={`w-2 h-2 rounded-full ${isTracking ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
+            {isTracking ? '🟢 Active' : '🔴 Stopped'}
+          </span>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-6">
+        <div className="flex flex-col p-5 rounded-2xl bg-white border border-slate-100 shadow-sm">
+          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Keystrokes / Min</span>
+          <span className="text-4xl font-bold text-slate-800">{kpm}</span>
+          <span className="text-xs text-slate-400 mt-2">rolling 60s rate</span>
+        </div>
+
+        <div className="flex flex-col p-5 rounded-2xl bg-white border border-slate-100 shadow-sm">
+          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Clicks / Min</span>
+          <span className="text-4xl font-bold text-slate-800">{cpm}</span>
+          <span className="text-xs text-slate-400 mt-2">rolling 60s rate</span>
+        </div>
+
+        <div className="flex flex-col p-5 rounded-2xl bg-white border border-slate-100 shadow-sm">
+          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Total Keys</span>
+          <span className="text-4xl font-bold text-slate-800">{metrics.totalKeystrokes}</span>
+          <span className="text-xs text-slate-400 mt-2">session total</span>
+        </div>
+
+        <div className="flex flex-col p-5 rounded-2xl bg-white border border-slate-100 shadow-sm">
+          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Total Clicks</span>
+          <span className="text-4xl font-bold text-slate-800">{metrics.totalClicks}</span>
+          <span className="text-xs text-slate-400 mt-2">session total</span>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export function Dashboard(props: DashboardProps) {
   const { view, name, sessions, tasks, projects, workLogs, onNavigate, onStart, onToggleTask, onAddTask, onEditTask, onDeleteTask, onAddProject, onEditProject, onArchiveProject, onDeleteProject, onAddWorkLog, onEditWorkLog, onDeleteWorkLog } = props
   const mode = view === 'developer' ? 'developer' : 'student'
@@ -269,6 +317,7 @@ export function Dashboard(props: DashboardProps) {
       <StatCard icon={TrendingUp} label="Average session" value={avg ? `${avg}m` : '—'} note="across your log" tone="blue" />
     </div>
     <div className="dashboard-grid mode-grid">
+      {mode === 'developer' && <ActivityTestWidget />}
       <section className="panel activity-panel"><div className="panel-heading"><div><span className="eyebrow">WEEKLY RHYTHM</span><h2>{mode === 'student' ? 'Your study minutes' : 'Coding activity'}</h2></div><span className="chart-total"><strong>{durationLabel(weekFocus)}</strong><small>this week</small></span></div><ActivityChart data={weekData} mode={mode} /></section>
       <CfiCard sessions={sessions} />
       <section className="panel distribution-panel"><div className="panel-heading"><div><span className="eyebrow">A LITTLE CONTEXT</span><h2>{mode === 'student' ? 'By subject' : 'By project'}</h2></div><button type="button" className="icon-button quiet-button" onClick={() => onNavigate('insights')} aria-label="View detailed insights"><ArrowRight size={16} /></button></div><SubjectChart data={distribution} mode={mode} /></section>

@@ -796,3 +796,49 @@ button { -webkit-tap-highlight-color: transparent; }
   .timer-stats { gap: 9px; }
   .timer-stats strong { font-size: 7px; }
 }
+
+/* Activity Test Widget */
+.activity-test-panel {
+  grid-column: 1 / -1;
+}
+
+.activity-test-panel .grid {
+  display: grid;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 24px;
+}
+
+@media (min-width: 768px) {
+  .activity-test-panel .grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.activity-test-panel .flex-col {
+  display: flex;
+  flex-direction: column;
+}
+
+.activity-test-panel .bg-white {
+  background: #ffffff !important;
+  border-radius: 16px;
+  padding: 20px;
+  border: 1px solid #f1f5f9 !important;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+}
+
+.activity-test-panel .text-4xl {
+  font-size: 2.25rem;
+  line-height: 2.5rem;
+  font-weight: 700;
+  color: #1e293b !important;
+}
+
+.activity-test-panel .text-slate-800 {
+  color: #1e293b !important;
+}
+
+.activity-test-panel .text-slate-400 {
+  color: #94a3b8 !important;
+}
