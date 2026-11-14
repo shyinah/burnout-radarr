@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
-import { Activity, BookOpen, ChevronDown, Cloud, Code2, Moon, MoreHorizontal, Sun } from 'lucide-react'
+import { Activity, BookOpen, ChevronDown, Code2, Moon, MoreHorizontal, Sun } from 'lucide-react'
 import { Dashboard } from './components/Dashboard'
 import { EntryDialog, type EntryKind, type EntryRecord, type EntryValues } from './components/EntryDialog'
 const HistoryPage = lazy(() => import('./components/InsightsPages').then((module) => ({ default: module.HistoryPage })))
