@@ -256,7 +256,7 @@ function ActivityTestWidget() {
   const { kpm, cpm, metrics, isTracking } = useActivityTracker({ autoStart: true });
 
   return (
-    <section className="panel activity-test-panel bg-white rounded-3xl p-6 shadow-sm border-0" style={{ gridColumn: '1 / -1' }}>
+    <section className="panel activity-test-panel bg-white rounded-3xl p-6 shadow-sm border border-slate-100 w-full max-w-full">
       <div className="panel-heading mb-6 flex items-center justify-between">
         <div>
           <span className="eyebrow text-xs uppercase tracking-wider text-slate-400 font-medium">REAL-TIME INPUT STREAM</span>
@@ -270,26 +270,26 @@ function ActivityTestWidget() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-6">
-        <div className="flex flex-col p-5 rounded-2xl bg-white border border-slate-100 shadow-sm">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-6 w-full max-w-full">
+        <div className="flex flex-col p-5 rounded-2xl bg-white border border-slate-100 shadow-sm min-w-0 max-w-full">
           <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Keystrokes / Min</span>
           <span className="text-4xl font-bold text-slate-800">{kpm}</span>
           <span className="text-xs text-slate-400 mt-2">rolling 60s rate</span>
         </div>
 
-        <div className="flex flex-col p-5 rounded-2xl bg-white border border-slate-100 shadow-sm">
+        <div className="flex flex-col p-5 rounded-2xl bg-white border border-slate-100 shadow-sm min-w-0 max-w-full">
           <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Clicks / Min</span>
           <span className="text-4xl font-bold text-slate-800">{cpm}</span>
           <span className="text-xs text-slate-400 mt-2">rolling 60s rate</span>
         </div>
 
-        <div className="flex flex-col p-5 rounded-2xl bg-white border border-slate-100 shadow-sm">
+        <div className="flex flex-col p-5 rounded-2xl bg-white border border-slate-100 shadow-sm min-w-0 max-w-full">
           <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Total Keys</span>
           <span className="text-4xl font-bold text-slate-800">{metrics.totalKeystrokes}</span>
           <span className="text-xs text-slate-400 mt-2">session total</span>
         </div>
 
-        <div className="flex flex-col p-5 rounded-2xl bg-white border border-slate-100 shadow-sm">
+        <div className="flex flex-col p-5 rounded-2xl bg-white border border-slate-100 shadow-sm min-w-0 max-w-full">
           <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Total Clicks</span>
           <span className="text-4xl font-bold text-slate-800">{metrics.totalClicks}</span>
           <span className="text-xs text-slate-400 mt-2">session total</span>
@@ -378,94 +378,172 @@ export function Dashboard(props: DashboardProps) {
             tone="sage"
           />
         </div>
-        <div className="dashboard-grid overview-grid">
-          {mode === 'developer' && <ActivityTestWidget />}
-          <section className="panel activity-panel">
-            <div className="panel-heading">
-              <div>
-                <span className="eyebrow">THE LAST 7 DAYS</span>
-                <h2>{mode === 'student' ? 'Your study activity' : 'Your coding activity'}</h2>
-              </div>
-              <button type="button" className="text-action" onClick={() => onNavigate('insights')}>
-                More insights <ArrowRight size={14} />
-              </button>
-            </div>
-            <ActivityChart data={weekData} mode={mode} />
-          </section>
-          <CfiCard sessions={records} />
-          <section className="panel distribution-panel">
-            <div className="panel-heading">
-              <div>
-                <span className="eyebrow">A LITTLE CONTEXT</span>
-                <h2>{mode === 'student' ? 'By subject' : 'By project'}</h2>
-              </div>
-              <button type="button" className="icon-button quiet-button" onClick={() => onNavigate('insights')} aria-label="View detailed insights">
-                <ArrowRight size={16} />
-              </button>
-            </div>
-            <SubjectChart data={distribution} mode={mode} />
-          </section>
+        <div className="dashboard-content-container">
           {mode === 'student' ? (
-            <TaskPreview tasks={tasks} onToggle={onToggleTask} onAdd={onAddTask} onEdit={onEditTask} onDelete={onDeleteTask} />
+            <div className="dashboard-mode-block student-mode-block">
+              <div className="dashboard-columns-grid">
+                <div className="dashboard-column dashboard-primary-column">
+                  <section className="panel activity-panel">
+                    <div className="panel-heading">
+                      <div>
+                        <span className="eyebrow">THE LAST 7 DAYS</span>
+                        <h2>Your study activity</h2>
+                      </div>
+                      <button type="button" className="text-action" onClick={() => onNavigate('insights')}>
+                        More insights <ArrowRight size={14} />
+                      </button>
+                    </div>
+                    <ActivityChart data={weekData} mode={mode} />
+                  </section>
+                  <section className="panel distribution-panel">
+                    <div className="panel-heading">
+                      <div>
+                        <span className="eyebrow">A LITTLE CONTEXT</span>
+                        <h2>By subject</h2>
+                      </div>
+                      <button type="button" className="icon-button quiet-button" onClick={() => onNavigate('insights')} aria-label="View detailed insights">
+                        <ArrowRight size={16} />
+                      </button>
+                    </div>
+                    <SubjectChart data={distribution} mode={mode} />
+                  </section>
+                  <section className="panel recent-panel">
+                    <div className="panel-heading">
+                      <div>
+                        <span className="eyebrow">JUST CHECKING IN</span>
+                        <h2>Recent study sessions</h2>
+                      </div>
+                      <button type="button" className="text-action" onClick={() => onNavigate('sessions')}>
+                        View all <ArrowRight size={14} />
+                      </button>
+                    </div>
+                    <div className="session-list">
+                      {recent.length ? (
+                        recent.map((session) => <SessionRow key={session.id} session={session} mode={mode} />)
+                      ) : (
+                        <div className="inline-empty">Your next session will show up here.</div>
+                      )}
+                    </div>
+                  </section>
+                </div>
+                <div className="dashboard-column dashboard-secondary-column">
+                  <CfiCard sessions={records} />
+                  <TaskPreview tasks={tasks} onToggle={onToggleTask} onAdd={onAddTask} onEdit={onEditTask} onDelete={onDeleteTask} />
+                  <section className="panel quickstart-panel">
+                    <div className="panel-heading">
+                      <div>
+                        <span className="eyebrow">START WHERE YOU ARE</span>
+                        <h2>Student focus</h2>
+                      </div>
+                      <span className="sparkle-mark"><Sparkles size={17} /></span>
+                    </div>
+                    <button className="quickstart-option study-option" type="button" onClick={() => onStart('student')}>
+                      <span className="quickstart-icon"><BookOpen size={18} /></span>
+                      <span><strong>Study something</strong><small>Make a little progress, gently.</small></span>
+                      <ArrowRight size={16} />
+                    </button>
+                    <div className="quiet-reminder">
+                      <Lightbulb size={15} />
+                      <span>
+                        {latestSession && latestSession.perceivedFatigue >= 6
+                          ? 'Your last check-in felt heavy. Try a lighter next step.'
+                          : latestSession && latestSession.sleepHours < 7
+                            ? `You logged ${latestSession.sleepHours} hours of sleep. Leave a little breathing room today.`
+                            : 'Small breaks are part of the work.'}
+                      </span>
+                      <button type="button" onClick={() => onNavigate('recommendations')}>
+                        Recovery notes <ArrowRight size={12} />
+                      </button>
+                    </div>
+                  </section>
+                </div>
+              </div>
+            </div>
           ) : (
-            <>
-              <ProjectPreview projects={projects} sessions={records} onAdd={onAddProject} onEdit={onEditProject} onArchive={onArchiveProject} onDelete={onDeleteProject} />
-              <WorkLogPreview logs={workLogs} onAdd={onAddWorkLog} onEdit={onEditWorkLog} onDelete={onDeleteWorkLog} />
-            </>
+            <div className="dashboard-mode-block developer-mode-block">
+              <div className="developer-top-widget">
+                <ActivityTestWidget />
+              </div>
+              <div className="dashboard-columns-grid">
+                <div className="dashboard-column dashboard-primary-column">
+                  <section className="panel activity-panel">
+                    <div className="panel-heading">
+                      <div>
+                        <span className="eyebrow">THE LAST 7 DAYS</span>
+                        <h2>Your coding activity</h2>
+                      </div>
+                      <button type="button" className="text-action" onClick={() => onNavigate('insights')}>
+                        More insights <ArrowRight size={14} />
+                      </button>
+                    </div>
+                    <ActivityChart data={weekData} mode={mode} />
+                  </section>
+                  <section className="panel distribution-panel">
+                    <div className="panel-heading">
+                      <div>
+                        <span className="eyebrow">A LITTLE CONTEXT</span>
+                        <h2>By project</h2>
+                      </div>
+                      <button type="button" className="icon-button quiet-button" onClick={() => onNavigate('insights')} aria-label="View detailed insights">
+                        <ArrowRight size={16} />
+                      </button>
+                    </div>
+                    <SubjectChart data={distribution} mode={mode} />
+                  </section>
+                  <section className="panel recent-panel">
+                    <div className="panel-heading">
+                      <div>
+                        <span className="eyebrow">JUST CHECKING IN</span>
+                        <h2>Recent work sessions</h2>
+                      </div>
+                      <button type="button" className="text-action" onClick={() => onNavigate('sessions')}>
+                        View all <ArrowRight size={14} />
+                      </button>
+                    </div>
+                    <div className="session-list">
+                      {recent.length ? (
+                        recent.map((session) => <SessionRow key={session.id} session={session} mode={mode} />)
+                      ) : (
+                        <div className="inline-empty">Your next session will show up here.</div>
+                      )}
+                    </div>
+                  </section>
+                </div>
+                <div className="dashboard-column dashboard-secondary-column">
+                  <CfiCard sessions={records} />
+                  <ProjectPreview projects={projects} sessions={records} onAdd={onAddProject} onEdit={onEditProject} onArchive={onArchiveProject} onDelete={onDeleteProject} />
+                  <WorkLogPreview logs={workLogs} onAdd={onAddWorkLog} onEdit={onEditWorkLog} onDelete={onDeleteWorkLog} />
+                  <section className="panel quickstart-panel">
+                    <div className="panel-heading">
+                      <div>
+                        <span className="eyebrow">START WHERE YOU ARE</span>
+                        <h2>Developer focus</h2>
+                      </div>
+                      <span className="sparkle-mark"><Sparkles size={17} /></span>
+                    </div>
+                    <button className="quickstart-option dev-option" type="button" onClick={() => onStart('developer')}>
+                      <span className="quickstart-icon"><Code2 size={18} /></span>
+                      <span><strong>Build something</strong><small>Focus on the next right thing.</small></span>
+                      <ArrowRight size={16} />
+                    </button>
+                    <div className="quiet-reminder">
+                      <Lightbulb size={15} />
+                      <span>
+                        {latestSession && latestSession.perceivedFatigue >= 6
+                          ? 'Your last check-in felt heavy. Try a lighter next step.'
+                          : latestSession && latestSession.sleepHours < 7
+                            ? `You logged ${latestSession.sleepHours} hours of sleep. Leave a little breathing room today.`
+                            : 'Small breaks are part of the work.'}
+                      </span>
+                      <button type="button" onClick={() => onNavigate('recommendations')}>
+                        Recovery notes <ArrowRight size={12} />
+                      </button>
+                    </div>
+                  </section>
+                </div>
+              </div>
+            </div>
           )}
-          <section className="panel recent-panel">
-            <div className="panel-heading">
-              <div>
-                <span className="eyebrow">JUST CHECKING IN</span>
-                <h2>{mode === 'student' ? 'Recent study sessions' : 'Recent work sessions'}</h2>
-              </div>
-              <button type="button" className="text-action" onClick={() => onNavigate('sessions')}>
-                View all <ArrowRight size={14} />
-              </button>
-            </div>
-            <div className="session-list">
-              {recent.length ? (
-                recent.map((session) => <SessionRow key={session.id} session={session} mode={mode} />)
-              ) : (
-                <div className="inline-empty">Your next session will show up here.</div>
-              )}
-            </div>
-          </section>
-          <section className="panel quickstart-panel">
-            <div className="panel-heading">
-              <div>
-                <span className="eyebrow">START WHERE YOU ARE</span>
-                <h2>{mode === 'student' ? 'Student focus' : 'Developer focus'}</h2>
-              </div>
-              <span className="sparkle-mark"><Sparkles size={17} /></span>
-            </div>
-            {mode === 'student' ? (
-              <button className="quickstart-option study-option" type="button" onClick={() => onStart('student')}>
-                <span className="quickstart-icon"><BookOpen size={18} /></span>
-                <span><strong>Study something</strong><small>Make a little progress, gently.</small></span>
-                <ArrowRight size={16} />
-              </button>
-            ) : (
-              <button className="quickstart-option dev-option" type="button" onClick={() => onStart('developer')}>
-                <span className="quickstart-icon"><Code2 size={18} /></span>
-                <span><strong>Build something</strong><small>Focus on the next right thing.</small></span>
-                <ArrowRight size={16} />
-              </button>
-            )}
-            <div className="quiet-reminder">
-              <Lightbulb size={15} />
-              <span>
-                {latestSession && latestSession.perceivedFatigue >= 6
-                  ? 'Your last check-in felt heavy. Try a lighter next step.'
-                  : latestSession && latestSession.sleepHours < 7
-                    ? `You logged ${latestSession.sleepHours} hours of sleep. Leave a little breathing room today.`
-                    : 'Small breaks are part of the work.'}
-              </span>
-              <button type="button" onClick={() => onNavigate('recommendations')}>
-                Recovery notes <ArrowRight size={12} />
-              </button>
-            </div>
-          </section>
         </div>
       </div>
     )
