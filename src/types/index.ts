@@ -7,6 +7,7 @@ export interface SessionInput {
   breakMinutes: number;
   sleepHours: number;
   perceivedFatigue: number; // 1–10 scale
+  endFatigue?: number; // 1–10 post-session fatigue level
   sessionDate: string;
 }
 

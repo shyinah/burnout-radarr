@@ -13,6 +13,7 @@ export interface SavedSession extends SessionRecord {
   completed: boolean
   pendingCFI: boolean
   feeling: string
+  endFatigue?: number
 }
 
 export interface StudyTask {

@@ -179,14 +179,16 @@ function App() {
     setBreakReminder(false)
   }
 
-  async function saveSession(feeling: string) {
+  async function saveSession(feeling: string, endFatigue?: number) {
     if (!timer) return
+    const resolvedEndFatigue = endFatigue ?? timer.draft.perceivedFatigue
     const input: SessionInput = {
       mode: timer.draft.mode,
       focusMinutes: Math.max(1, Math.round(timer.elapsedFocusSeconds / 60)),
       breakMinutes: timer.draft.breakMinutes,
       sleepHours: timer.draft.sleepHours,
       perceivedFatigue: timer.draft.perceivedFatigue,
+      endFatigue: resolvedEndFatigue,
       sessionDate: new Date().toISOString(),
     }
     const cfiResult = await evaluateWithCFI(input)
@@ -203,6 +205,7 @@ function App() {
       pendingCFI: !cfiResult,
       cfiScore: cfiResult?.score ?? 0,
       feeling,
+      endFatigue: resolvedEndFatigue,
     }
     setData((current) => ({ ...current, sessions: [session, ...current.sessions] }))
     setTimer(null)
