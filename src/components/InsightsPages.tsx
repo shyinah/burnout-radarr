@@ -148,8 +148,13 @@ export function InsightsPage({ sessions }: { sessions: SavedSession[] }) {
   </div>
 }
 
-export function RecommendationsPage({ sessions, onStart }: { sessions: SavedSession[]; onStart: (mode: 'student' | 'developer') => void }) {
+export function RecommendationsPage({ sessions, mode = 'student', onStart }: {
+  sessions: SavedSession[]
+  mode?: 'student' | 'developer'
+  onStart: (mode: 'student' | 'developer') => void
+}) {
   const latest = [...sessions].sort((a, b) => b.sessionDate.localeCompare(a.sessionDate))[0]
+  const targetMode = mode ?? latest?.mode ?? 'student'
   const suggestions = [
     { icon: MoonStar, title: 'Make room for rest', body: latest && latest.sleepHours < 7 ? `You logged ${latest.sleepHours} hours of sleep before your last session. If it fits your day, a little extra rest may help.` : 'A consistent wind-down can make it easier to arrive at tomorrow with a clearer head.', tone: 'lavender' },
     { icon: SunMedium, title: 'Let the break be a break', body: latest ? `Your last session included a ${latest.breakMinutes}-minute pause. Try standing up, stretching, or looking away from the screen.` : 'A short stretch or a glass of water can be a good reset between focus blocks.', tone: 'peach' },
@@ -157,19 +162,22 @@ export function RecommendationsPage({ sessions, onStart }: { sessions: SavedSess
   ]
   return <div className="content-page">
     <div className="page-title-row"><div><span className="eyebrow">A KINDER KIND OF NUDGE</span><h1>Recovery notes</h1><p>Practical ideas, never medical advice or a grade.</p></div><span className="recovery-badge"><Heart size={14} /> Care over output</span></div>
-    <div className="recommendation-grid">{suggestions.map(({ icon: Icon, title, body, tone }) => <article className={`recommendation-card ${tone}`} key={title}><span className="recommendation-icon"><Icon size={19} /></span><span className="eyebrow">A SMALL SUGGESTION</span><h2>{title}</h2><p>{body}</p><span className="recommendation-foot"><Check size={13} /> Take what helps, leave the rest.</span></article>)}</div>
-    <section className="panel recommendation-cta"><div><span className="eyebrow">READY WHEN YOU ARE</span><h2>Start with a manageable block.</h2><p>Choose a focus session that fits the energy you have today.</p></div><button type="button" className="button-primary" onClick={() => onStart(latest?.mode ?? 'student')}><Clock3 size={16} /> Set up a session <ArrowRight size={15} /></button></section>
+    <div className="recommendation-grid">{suggestions.map(({ icon: Icon, title, body, tone }) => <article className={`recommendation-card ${tone}`} key={title} onClick={() => onStart(targetMode)} style={{ cursor: 'pointer' }}><span className="recommendation-icon"><Icon size={19} /></span><span className="eyebrow">A SMALL SUGGESTION</span><h2>{title}</h2><p>{body}</p><span className="recommendation-foot"><Check size={13} /> Take what helps, leave the rest.</span></article>)}</div>
+    <section className="panel recommendation-cta"><div><span className="eyebrow">READY WHEN YOU ARE</span><h2>Start with a manageable block.</h2><p>Choose a focus session that fits the energy you have today.</p></div><button type="button" className="button-primary" onClick={() => onStart(targetMode)}><Clock3 size={16} /> Set up a session <ArrowRight size={15} /></button></section>
     <p className="medical-note"><ShieldCheck size={15} /> Burnout Radarr offers an experimental wellness estimate for reflection only. It does not diagnose, treat, or replace professional care.</p>
   </div>
 }
 
-export function SettingsPage({ preferences, sessions, onChange, onResetSettings, onResetData, onSave }: {
+export function SettingsPage({ preferences, sessions, user, onChange, onResetSettings, onResetData, onSave, onOpenAuth, onSignOut }: {
   preferences: AppPreferences
   sessions: SavedSession[]
+  user?: { email?: string } | null
   onChange: (patch: Partial<AppPreferences>) => void
   onResetSettings: () => void
   onResetData: () => void
   onSave: () => void
+  onOpenAuth?: () => void
+  onSignOut?: () => void
 }) {
   return <div className="content-page">
     <div className="page-title-row"><div><span className="eyebrow">MAKE THIS SPACE YOURS</span><h1>Settings</h1><p>Your preferences stay on this device.</p></div><button className="button-primary settings-save" type="button" onClick={onSave}><Check size={16} /> Save settings</button></div>
@@ -192,7 +200,28 @@ export function SettingsPage({ preferences, sessions, onChange, onResetSettings,
         <section className="panel settings-section data-settings"><div className="settings-section-title"><span className="settings-icon"><ArrowDownToLine size={17} /></span><div><h2>Your data</h2><p>Manage the demo journal stored on this device.</p></div></div><button className="button-secondary" type="button" onClick={() => exportSessions(sessions)}><ArrowDownToLine size={15} /> Export session data</button><button className="button-danger-quiet" type="button" onClick={onResetData}>Reset local demo data</button></section>
         <section className="panel settings-section reset-section"><div><h2>Reset preferences</h2><p>Restore the original mode, theme and timer defaults.</p></div><button type="button" className="button-secondary" onClick={onResetSettings}>Reset settings</button></section>
       </div>
-      <aside className="settings-aside"><div className="privacy-card"><span className="privacy-icon"><ShieldCheck size={18} /></span><span className="eyebrow">PRIVATE BY DEFAULT</span><h2>Your journal stays yours.</h2><p>Sessions and settings are saved in this browser&apos;s local storage. No account, backend, or tracking is connected.</p><span className="privacy-status"><i /> Local storage enabled</span></div><div className="cfi-notice"><CircleHelp size={15} /><p>The CFI is experimental and is not a medical diagnosis. New sessions remain unscored until a CFI engine is connected.</p></div></aside>
+      <aside className="settings-aside">
+        <div className="privacy-card">
+          <span className="privacy-icon"><ShieldCheck size={18} /></span>
+          <span className="eyebrow">{user ? 'CLOUD CONNECTED' : 'PRIVATE BY DEFAULT'}</span>
+          <h2>{user ? 'Cloud sync active.' : 'Your journal stays yours.'}</h2>
+          <p>{user ? 'Your sessions and CFI results are securely stored with Supabase Row Level Security.' : 'Sessions and settings are saved in this browser’s local storage. Sign in to sync across devices.'}</p>
+          <span className="privacy-status">
+            <i style={{ background: user ? '#607f42' : undefined }} />
+            {user ? `Signed in (${user.email})` : 'Local storage enabled'}
+          </span>
+          {user ? (
+            <button type="button" className="button-secondary" onClick={onSignOut} style={{ marginTop: '12px', width: '100%', fontSize: '10px' }}>
+              Sign out
+            </button>
+          ) : (
+            <button type="button" className="button-secondary" onClick={onOpenAuth} style={{ marginTop: '12px', width: '100%', fontSize: '10px' }}>
+              Sign in to cloud
+            </button>
+          )}
+        </div>
+        <div className="cfi-notice"><CircleHelp size={15} /><p>The CFI is an experimental wellness estimate, not a medical diagnosis. Completed sessions are evaluated locally by the CFI engine.</p></div>
+      </aside>
     </div>
   </div>
 }
