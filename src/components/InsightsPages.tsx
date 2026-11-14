@@ -163,13 +163,16 @@ export function RecommendationsPage({ sessions, onStart }: { sessions: SavedSess
   </div>
 }
 
-export function SettingsPage({ preferences, sessions, onChange, onResetSettings, onResetData, onSave }: {
+export function SettingsPage({ preferences, sessions, user, onChange, onResetSettings, onResetData, onSave, onOpenAuth, onSignOut }: {
   preferences: AppPreferences
   sessions: SavedSession[]
+  user?: { email?: string } | null
   onChange: (patch: Partial<AppPreferences>) => void
   onResetSettings: () => void
   onResetData: () => void
   onSave: () => void
+  onOpenAuth?: () => void
+  onSignOut?: () => void
 }) {
   return <div className="content-page">
     <div className="page-title-row"><div><span className="eyebrow">MAKE THIS SPACE YOURS</span><h1>Settings</h1><p>Your preferences stay on this device.</p></div><button className="button-primary settings-save" type="button" onClick={onSave}><Check size={16} /> Save settings</button></div>
@@ -192,7 +195,28 @@ export function SettingsPage({ preferences, sessions, onChange, onResetSettings,
         <section className="panel settings-section data-settings"><div className="settings-section-title"><span className="settings-icon"><ArrowDownToLine size={17} /></span><div><h2>Your data</h2><p>Manage the demo journal stored on this device.</p></div></div><button className="button-secondary" type="button" onClick={() => exportSessions(sessions)}><ArrowDownToLine size={15} /> Export session data</button><button className="button-danger-quiet" type="button" onClick={onResetData}>Reset local demo data</button></section>
         <section className="panel settings-section reset-section"><div><h2>Reset preferences</h2><p>Restore the original mode, theme and timer defaults.</p></div><button type="button" className="button-secondary" onClick={onResetSettings}>Reset settings</button></section>
       </div>
-      <aside className="settings-aside"><div className="privacy-card"><span className="privacy-icon"><ShieldCheck size={18} /></span><span className="eyebrow">PRIVATE BY DEFAULT</span><h2>Your journal stays yours.</h2><p>Sessions and settings are saved in this browser&apos;s local storage. No account, backend, or tracking is connected.</p><span className="privacy-status"><i /> Local storage enabled</span></div><div className="cfi-notice"><CircleHelp size={15} /><p>The CFI is experimental and is not a medical diagnosis. New sessions remain unscored until a CFI engine is connected.</p></div></aside>
+      <aside className="settings-aside">
+        <div className="privacy-card">
+          <span className="privacy-icon"><ShieldCheck size={18} /></span>
+          <span className="eyebrow">{user ? 'CLOUD CONNECTED' : 'PRIVATE BY DEFAULT'}</span>
+          <h2>{user ? 'Cloud sync active.' : 'Your journal stays yours.'}</h2>
+          <p>{user ? 'Your sessions and CFI results are securely stored with Supabase Row Level Security.' : 'Sessions and settings are saved in this browser’s local storage. Sign in to sync across devices.'}</p>
+          <span className="privacy-status">
+            <i style={{ background: user ? '#607f42' : undefined }} />
+            {user ? `Signed in (${user.email})` : 'Local storage enabled'}
+          </span>
+          {user ? (
+            <button type="button" className="button-secondary" onClick={onSignOut} style={{ marginTop: '12px', width: '100%', fontSize: '10px' }}>
+              Sign out
+            </button>
+          ) : (
+            <button type="button" className="button-secondary" onClick={onOpenAuth} style={{ marginTop: '12px', width: '100%', fontSize: '10px' }}>
+              Sign in to cloud
+            </button>
+          )}
+        </div>
+        <div className="cfi-notice"><CircleHelp size={15} /><p>The CFI is an experimental wellness estimate, not a medical diagnosis. Completed sessions are evaluated locally by the CFI engine.</p></div>
+      </aside>
     </div>
   </div>
 }

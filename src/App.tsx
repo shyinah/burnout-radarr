@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
-import { ChevronDown, Moon, MoreHorizontal, Sun } from 'lucide-react'
+import { ChevronDown, Cloud, Moon, MoreHorizontal, Sun } from 'lucide-react'
 import { Dashboard } from './components/Dashboard'
 import { EntryDialog, type EntryKind, type EntryRecord, type EntryValues } from './components/EntryDialog'
 const HistoryPage = lazy(() => import('./components/InsightsPages').then((module) => ({ default: module.HistoryPage })))
@@ -9,6 +9,7 @@ const SettingsPage = lazy(() => import('./components/InsightsPages').then((modul
 import { SessionSetupDialog, FocusTimerDialog, type TimerState } from './components/SessionDialogs'
 import { SessionDetailsDialog } from './components/SessionDetailsDialog'
 import { Sidebar } from './components/Sidebar'
+import { AuthDialog } from './components/AuthDialog'
 import {
   DEFAULT_PREFERENCES,
   type AppData,
@@ -21,8 +22,16 @@ import {
   type WorkLogItem,
 } from './services/app-state'
 import { evaluateWithCFI } from './services/cfi'
-import { loadAppData, resetAppData, saveAppData } from './services/storage'
+import { loadAppData, resetAppData, saveAppData, backupGuestData, restoreGuestData } from './services/storage'
+import { supabase } from './services/supabase'
+import {
+  fetchCloudSessions,
+  fetchUserProfile,
+  getAuthenticatedUser,
+  saveSessionToCloud,
+} from './services/cloud-sessions'
 import type { SessionInput, UserMode } from './types'
+import type { User } from '@supabase/supabase-js'
 import './App.css'
 
 const pageTitles: Record<AppPage, string> = {
@@ -49,8 +58,81 @@ function App() {
   const [breakReminder, setBreakReminder] = useState(false)
   const [reminderSnoozeAt, setReminderSnoozeAt] = useState<number | null>(null)
   const [toast, setToast] = useState('')
+  const [isSaving, setIsSaving] = useState(false)
+  const [currentUser, setCurrentUser] = useState<User | null>(null)
+  const [authOpen, setAuthOpen] = useState(false)
 
-  useEffect(() => saveAppData(data), [data])
+  async function syncFromCloud(user: User) {
+    try {
+      const profile = await fetchUserProfile(user.id)
+      const userDisplayName =
+        profile?.displayName ||
+        user.user_metadata?.full_name ||
+        user.user_metadata?.name ||
+        user.email?.split('@')[0] ||
+        'Friend'
+
+      const { sessions: cloudSessions, error } = await fetchCloudSessions(user.id)
+
+      if (error) {
+        console.warn('Cloud sync note:', error)
+        setToast('Operating from local cache (cloud session fetch failed).')
+        return
+      }
+
+      setData((current) => ({
+        ...current,
+        sessions: cloudSessions,
+        preferences: {
+          ...current.preferences,
+          name: userDisplayName,
+        },
+      }))
+    } catch (err) {
+      console.error('Error syncing from cloud:', err)
+    }
+  }
+
+  // Restore user session on mount and listen for auth state changes
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      const user = session?.user ?? null
+      setCurrentUser(user)
+      if (user) {
+        syncFromCloud(user)
+      }
+    })
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      const nextUser = session?.user ?? null
+      setCurrentUser(nextUser)
+
+      if (event === 'SIGNED_IN' && nextUser) {
+        setData((current) => {
+          backupGuestData(current)
+          return current
+        })
+        await syncFromCloud(nextUser)
+        const name = nextUser.user_metadata?.full_name || nextUser.email || 'friend'
+        setToast(`Signed in. Cloud sessions loaded for ${name}.`)
+      } else if (event === 'SIGNED_OUT') {
+        const restored = restoreGuestData()
+        setData(restored)
+        setToast('Signed out. Local storage restored.')
+      }
+    })
+
+    return () => {
+      subscription.unsubscribe()
+    }
+  }, [])
+
+  useEffect(() => {
+    saveAppData(data)
+    if (!currentUser) {
+      backupGuestData(data)
+    }
+  }, [data, currentUser])
 
   useEffect(() => {
     if (!toast) return
@@ -179,35 +261,69 @@ function App() {
     setBreakReminder(false)
   }
 
+  async function handleLogout() {
+    setProfileOpen(false)
+    try {
+      await supabase.auth.signOut()
+    } catch (err) {
+      console.error('Logout error:', err)
+    }
+  }
+
   async function saveSession(feeling: string) {
-    if (!timer) return
-    const input: SessionInput = {
-      mode: timer.draft.mode,
-      focusMinutes: Math.max(1, Math.round(timer.elapsedFocusSeconds / 60)),
-      breakMinutes: timer.draft.breakMinutes,
-      sleepHours: timer.draft.sleepHours,
-      perceivedFatigue: timer.draft.perceivedFatigue,
-      sessionDate: new Date().toISOString(),
+    if (!timer || isSaving) return
+    setIsSaving(true)
+    try {
+      const input: SessionInput = {
+        mode: timer.draft.mode,
+        focusMinutes: Math.max(1, Math.round(timer.elapsedFocusSeconds / 60)),
+        breakMinutes: timer.draft.breakMinutes,
+        sleepHours: timer.draft.sleepHours,
+        perceivedFatigue: timer.draft.perceivedFatigue,
+        sessionDate: new Date().toISOString(),
+      }
+      const cfiResult = await evaluateWithCFI(input)
+
+      // Requirement 5: Always use authenticated Supabase user ID. Never trust client-supplied userId.
+      const authUser = await getAuthenticatedUser()
+      const effectiveUserId = authUser ? authUser.id : 'local-user'
+
+      const session: SavedSession = {
+        ...input,
+        id: createId(),
+        userId: effectiveUserId,
+        title: timer.draft.title,
+        subject: timer.draft.subject,
+        project: timer.draft.project,
+        category: timer.draft.category,
+        description: timer.draft.description,
+        goal: timer.draft.goal,
+        completed: timer.completed,
+        pendingCFI: !cfiResult,
+        cfiScore: cfiResult ? cfiResult.score : -1,
+        cfiRiskLevel: cfiResult?.riskLevel,
+        cfiExplanation: cfiResult?.explanation,
+        cfiRecommendations: cfiResult?.recommendations,
+        feeling,
+      }
+      setData((current) => ({ ...current, sessions: [session, ...current.sessions] }))
+      setTimer(null)
+      setBreakReminder(false)
+
+      if (authUser) {
+        const cloudResult = await saveSessionToCloud(session, authUser.id)
+        if (cloudResult.success) {
+          setToast(session.completed ? 'Session saved and synced to cloud.' : 'Session saved (ended early) and synced to cloud.')
+        } else {
+          console.warn('Cloud sync error:', cloudResult.error)
+          setToast(session.completed ? 'Session saved locally (cloud sync offline).' : 'Session saved locally (ended early).')
+        }
+      } else {
+        setToast(session.completed ? 'Session saved. Nice work showing up.' : 'Session saved as ended early.')
+      }
+    } finally {
+      setIsSaving(false)
     }
-    const cfiResult = await evaluateWithCFI(input)
-    const session: SavedSession = {
-      ...input,
-      id: createId(),
-      title: timer.draft.title,
-      subject: timer.draft.subject,
-      project: timer.draft.project,
-      category: timer.draft.category,
-      description: timer.draft.description,
-      goal: timer.draft.goal,
-      completed: timer.completed,
-      pendingCFI: !cfiResult,
-      cfiScore: cfiResult?.score ?? 0,
-      feeling,
-    }
-    setData((current) => ({ ...current, sessions: [session, ...current.sessions] }))
-    setTimer(null)
-    setBreakReminder(false)
-    setToast(session.completed ? 'Session saved. Nice work showing up.' : 'Session saved as ended early.')
   }
 
   function resetSettings() {
@@ -236,7 +352,17 @@ function App() {
         <div className="topbar-actions">
           <div className="topbar-mode-switch" aria-label="Choose mode"><button type="button" className={currentMode === 'student' ? 'selected' : ''} onClick={() => navigate('student')}><span className="mode-switch-dot student-dot" /> Study</button><button type="button" className={currentMode === 'developer' ? 'selected' : ''} onClick={() => navigate('developer')}><span className="mode-switch-dot dev-dot" /> Dev</button></div>
           <button type="button" className="icon-button topbar-icon" onClick={() => setData((current) => ({ ...current, preferences: { ...current.preferences, theme: current.preferences.theme === 'dark' ? 'light' : 'dark' } }))} aria-label={data.preferences.theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'} title="Toggle theme">{data.preferences.theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}</button>
-          <div className="profile-menu-wrap"><button type="button" className={`profile-trigger${profileOpen ? ' is-open' : ''}`} onClick={() => setProfileOpen((open) => !open)} aria-expanded={profileOpen} aria-haspopup="menu"><span className="profile-avatar">{data.preferences.name.trim().slice(0, 1).toUpperCase() || 'T'}</span><span className="profile-name">{data.preferences.name}</span><ChevronDown size={14} /></button>{profileOpen && <div className="profile-menu" role="menu"><div className="profile-menu-heading"><strong>{data.preferences.name}</strong><small>Personal journal</small></div><button type="button" role="menuitem" onClick={() => navigate('settings')}>Profile &amp; settings</button><button type="button" role="menuitem" onClick={() => { navigate('sessions'); setProfileOpen(false) }}>View session history</button></div>}</div>
+          {!currentUser && (
+            <button
+              type="button"
+              className="button-secondary topbar-auth-btn"
+              onClick={() => setAuthOpen(true)}
+              style={{ minHeight: '31px', padding: '0 10px', fontSize: '10px' }}
+            >
+              <Cloud size={14} /> Sign in
+            </button>
+          )}
+          <div className="profile-menu-wrap"><button type="button" className={`profile-trigger${profileOpen ? ' is-open' : ''}`} onClick={() => setProfileOpen((open) => !open)} aria-expanded={profileOpen} aria-haspopup="menu"><span className="profile-avatar">{data.preferences.name.trim().slice(0, 1).toUpperCase() || 'T'}</span><span className="profile-name">{data.preferences.name}</span>{currentUser && <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#7da58b', marginRight: '-2px' }} title="Cloud connected" />}<ChevronDown size={14} /></button>{profileOpen && <div className="profile-menu" role="menu"><div className="profile-menu-heading"><strong>{data.preferences.name}</strong><small>{currentUser ? currentUser.email : 'Personal journal (local)'}</small>{currentUser ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '9px', color: '#607f42', marginTop: '2px', fontWeight: 600 }}><span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#607f42' }} /> Cloud connected</span> : <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '9px', color: 'var(--muted)', marginTop: '2px' }}>Local storage mode</span>}</div><button type="button" role="menuitem" onClick={() => navigate('settings')}>Profile &amp; settings</button><button type="button" role="menuitem" onClick={() => { navigate('sessions'); setProfileOpen(false) }}>View session history</button>{currentUser ? <button type="button" role="menuitem" onClick={handleLogout} style={{ color: '#d94343' }}>Sign out</button> : <button type="button" role="menuitem" onClick={() => { setAuthOpen(true); setProfileOpen(false) }}>Sign in / Create account</button>}</div>}</div>
         </div>
       </header>
       <main className="app-main">
@@ -266,10 +392,13 @@ function App() {
               : <SettingsPage
                 preferences={data.preferences}
                 sessions={data.sessions}
+                user={currentUser}
                 onChange={(patch: Partial<AppPreferences>) => setData((current) => ({ ...current, preferences: { ...current.preferences, ...patch } }))}
                 onResetSettings={resetSettings}
                 onResetData={resetData}
                 onSave={() => setToast('Settings saved on this device.')}
+                onOpenAuth={() => setAuthOpen(true)}
+                onSignOut={handleLogout}
               />}</Suspense>
       </main>
       <footer className="app-disclaimer">CFI is an experimental wellness estimate, not a medical diagnosis.</footer>
@@ -297,6 +426,7 @@ function App() {
     />}
     {entry && <EntryDialog kind={entry.kind} item={entry.item} projects={data.projects} onClose={() => setEntry(null)} onSave={saveEntry} />}
     {selectedSession && <SessionDetailsDialog session={selectedSession} onClose={() => setSelectedSession(null)} />}
+    {authOpen && <AuthDialog onClose={() => setAuthOpen(false)} onSuccess={() => setToast('Connected to Supabase cloud.')} />}
     {toast && <div className="toast-message" role="status" aria-live="polite"><span className="toast-mark"><MoreHorizontal size={16} /></span>{toast}<button type="button" onClick={() => setToast('')} aria-label="Dismiss notification">×</button></div>}
   </div>
 }
