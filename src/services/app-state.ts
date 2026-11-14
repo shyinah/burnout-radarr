@@ -1,4 +1,4 @@
-import type { SessionRecord, UserMode } from '../types'
+import type { Recommendation, SessionRecord, UserMode } from '../types/index.ts'
 
 export type AppPage = 'overview' | 'student' | 'developer' | 'sessions' | 'insights' | 'recommendations' | 'settings'
 export type AppTheme = 'light' | 'dark' | 'system'
@@ -13,6 +13,9 @@ export interface SavedSession extends SessionRecord {
   completed: boolean
   pendingCFI: boolean
   feeling: string
+  cfiRiskLevel?: 'low' | 'moderate' | 'high'
+  cfiExplanation?: string[]
+  cfiRecommendations?: Recommendation[]
 }
 
 export interface StudyTask {
@@ -109,6 +112,22 @@ const sampleSession = (input: {
   perceivedFatigue: input.fatigue,
   sessionDate: dateAt(input.daysAgo, input.hour),
   cfiScore: input.score,
+  cfiRiskLevel: input.score <= 33 ? 'low' : input.score <= 66 ? 'moderate' : 'high',
+  cfiExplanation: [
+    `Overall Cognitive Fatigue Index is ${input.score}/100, indicating a ${input.score <= 33 ? 'low' : input.score <= 66 ? 'moderate' : 'high'} fatigue risk.`,
+    `Self-reported fatigue: ${input.fatigue}/10`,
+    `Recorded sleep: ${input.sleepHours} hours`,
+    `Break duration: ${input.breakMinutes} minutes planned`,
+  ],
+  cfiRecommendations: [
+    {
+      title: input.score > 66 ? 'Recovery break' : input.score > 33 ? 'Pace your focus' : 'Steady rhythm',
+      description: input.score > 66
+        ? 'Consider taking time to step back and rest before resuming.'
+        : 'Continue with balanced focus blocks and short breaks.',
+      priority: input.score > 66 ? 'high' : input.score > 33 ? 'medium' : 'low',
+    },
+  ],
   completed: input.completed ?? true,
   pendingCFI: false,
   feeling: 'Steady',

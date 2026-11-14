@@ -77,12 +77,24 @@ function createDistribution(sessions: SavedSession[], mode: 'student' | 'develop
 function CfiCard({ sessions }: { sessions: SavedSession[] }) {
   const latest = [...sessions].sort((a, b) => b.sessionDate.localeCompare(a.sessionDate)).find((session) => !session.pendingCFI)
   const score = latest?.cfiScore ?? 0
-  const risk = score <= 33 ? 'Low' : score <= 66 ? 'Moderate' : 'High'
-  const factors = latest ? [
-    `${latest.sleepHours}h sleep recorded`,
-    `Fatigue check-in: ${latest.perceivedFatigue}/10`,
-    `${latest.breakMinutes}m planned break`,
-  ] : ['Complete a session to start your trend.']
+  const risk = latest?.cfiRiskLevel
+    ? latest.cfiRiskLevel.charAt(0).toUpperCase() + latest.cfiRiskLevel.slice(1)
+    : score <= 33
+      ? 'Low'
+      : score <= 66
+        ? 'Moderate'
+        : 'High'
+  const factors = latest?.cfiExplanation && latest.cfiExplanation.length > 1
+    ? latest.cfiExplanation.slice(1)
+    : latest
+      ? [
+          `${latest.sleepHours}h sleep recorded`,
+          `Fatigue check-in: ${latest.perceivedFatigue}/10`,
+          `${latest.breakMinutes}m planned break`,
+        ]
+      : ['Complete a session to start your trend.']
+  const isDemo = latest?.id?.startsWith('demo-') ?? true
+
   return (
     <section className="panel cfi-panel" aria-labelledby="cfi-title">
       <div className="panel-heading cfi-heading">
@@ -99,7 +111,7 @@ function CfiCard({ sessions }: { sessions: SavedSession[] }) {
           <ul className="cfi-factors">{factors.map((factor) => <li key={factor}><span className="factor-check"><Check size={10} /></span>{factor}</li>)}</ul>
         </div>
       </div>
-      <div className="cfi-footnote"><span>Experimental estimate · not a diagnosis</span><span className="demo-tag">Demo score</span></div>
+      <div className="cfi-footnote"><span>Experimental estimate · not a diagnosis</span><span className="demo-tag">{isDemo ? 'Demo score' : 'Calculated'}</span></div>
     </section>
   )
 }
