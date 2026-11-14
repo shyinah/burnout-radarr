@@ -27,3 +27,6 @@ export interface SessionRecord extends SessionInput {
   id: string;
   cfiScore: number;
 }
+
+export * from './activity.ts';
+
