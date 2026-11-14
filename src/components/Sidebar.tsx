@@ -13,8 +13,6 @@ import type { AppPage } from '../services/app-state'
 
 const navigation: { page: AppPage; label: string; icon: typeof LayoutDashboard }[] = [
   { page: 'overview', label: 'Overview', icon: LayoutDashboard },
-  { page: 'student', label: 'Student mode', icon: BookOpen },
-  { page: 'developer', label: 'Developer mode', icon: BriefcaseBusiness },
   { page: 'sessions', label: 'Focus sessions', icon: Timer },
   { page: 'insights', label: 'Insights', icon: ChartNoAxesCombined },
   { page: 'recommendations', label: 'Recommendations', icon: Lightbulb },
@@ -54,7 +52,7 @@ export function Sidebar({ activePage, onNavigate, mode }: SidebarProps) {
         <div className="sidebar-spacer" />
         <div className={`mode-chip ${mode}`}>
           <span className="mode-chip-mark">{mode === 'student' ? <BookOpen size={15} /> : <BriefcaseBusiness size={15} />}</span>
-          <span><small>YOU&apos;RE IN</small><strong>{mode === 'student' ? 'Study space' : 'Dev command'}</strong></span>
+          <span><small>ACTIVE MODE</small><strong>{mode === 'student' ? 'Student Mode' : 'Developer Mode'}</strong></span>
           <span className="mode-status-dot" />
         </div>
         <div className="sidebar-footer">

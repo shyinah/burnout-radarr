@@ -26,6 +26,8 @@ import { useActivityTracker } from '../hooks/useActivityTracker';
 
 interface DashboardProps {
   view: 'overview' | 'student' | 'developer'
+  activeMode?: 'student' | 'developer'
+  onModeChange?: (mode: 'student' | 'developer') => void
   name: string
   sessions: SavedSession[]
   tasks: StudyTask[]
@@ -182,11 +184,27 @@ function DeveloperHero({ name, onStart }: { name: string; onStart: () => void })
   )
 }
 
-function ModeSwitch({ onNavigate }: { onNavigate: (page: AppPage) => void }) {
+function ModeSwitch({ activeMode, onModeChange }: { activeMode?: 'student' | 'developer'; onModeChange?: (mode: 'student' | 'developer') => void }) {
   return (
-    <div className="mode-switch" aria-label="Choose a workspace">
-      <button type="button" onClick={() => onNavigate('student')}><BookOpen size={15} /> Study space</button>
-      <button type="button" onClick={() => onNavigate('developer')}><Code2 size={15} /> Dev command</button>
+    <div className="mode-switch" aria-label="Toggle active mode" role="tablist">
+      <button
+        type="button"
+        role="tab"
+        aria-selected={activeMode === 'student'}
+        className={activeMode === 'student' ? 'selected' : ''}
+        onClick={() => onModeChange?.('student')}
+      >
+        <BookOpen size={15} /> Student Mode
+      </button>
+      <button
+        type="button"
+        role="tab"
+        aria-selected={activeMode === 'developer'}
+        className={activeMode === 'developer' ? 'selected' : ''}
+        onClick={() => onModeChange?.('developer')}
+      >
+        <Code2 size={15} /> Developer Mode
+      </button>
     </div>
   )
 }
@@ -281,42 +299,182 @@ function ActivityTestWidget() {
 }
 
 export function Dashboard(props: DashboardProps) {
-  const { view, name, sessions, tasks, projects, workLogs, onNavigate, onStart, onToggleTask, onAddTask, onEditTask, onDeleteTask, onAddProject, onEditProject, onArchiveProject, onDeleteProject, onAddWorkLog, onEditWorkLog, onDeleteWorkLog } = props
-  const mode = view === 'developer' ? 'developer' : 'student'
-  const records = view === 'overview' ? sessions : sessions.filter((session) => session.mode === mode)
+  const {
+    view,
+    activeMode,
+    onModeChange,
+    name,
+    sessions,
+    tasks,
+    projects,
+    workLogs,
+    onNavigate,
+    onStart,
+    onToggleTask,
+    onAddTask,
+    onEditTask,
+    onDeleteTask,
+    onAddProject,
+    onEditProject,
+    onArchiveProject,
+    onDeleteProject,
+    onAddWorkLog,
+    onEditWorkLog,
+    onDeleteWorkLog,
+  } = props
+  const mode = activeMode ?? (view === 'developer' ? 'developer' : 'student')
+  const records = sessions.filter((session) => session.mode === mode)
   const today = new Date()
   const todaysRecords = records.filter((session) => sameDay(new Date(session.sessionDate), today))
   const focusToday = todaysRecords.reduce((total, session) => total + session.focusMinutes, 0)
-  const weekData = createWeekData(sessions, view === 'overview' ? undefined : mode)
+  const weekData = createWeekData(records, mode)
   const weekFocus = weekData.reduce((total, day) => total + day.minutes, 0)
-  const distribution = createDistribution(sessions, mode)
+  const distribution = createDistribution(records, mode)
   const avg = records.length ? Math.round(records.reduce((total, session) => total + session.focusMinutes, 0) / records.length) : 0
   const sessionsToday = todaysRecords.filter((session) => session.completed).length
   const recent = [...records].sort((a, b) => b.sessionDate.localeCompare(a.sessionDate)).slice(0, 4)
-  const latestSession = [...sessions].sort((a, b) => b.sessionDate.localeCompare(a.sessionDate))[0]
+  const latestSession = [...records].sort((a, b) => b.sessionDate.localeCompare(a.sessionDate))[0]
   const recentLogs = [...sessions].filter((session) => session.mode === 'developer').sort((a, b) => b.sessionDate.localeCompare(a.sessionDate)).slice(0, 3)
   const studentGreeting = new Date().getHours() < 12 ? 'A bright start to the day.' : 'You have done enough to be proud of.'
 
   if (view === 'overview') {
-    const overallMinutes = sessions.filter((session) => sameDay(new Date(session.sessionDate), today)).reduce((total, session) => total + session.focusMinutes, 0)
-    return <div className="dashboard-page overview-page">
-      <div className="page-title-row"><div><span className="eyebrow">YOUR PERSONAL RADARR</span><h1>A little more in tune.</h1><p>Notice your rhythm, then make space for what you need.</p></div><span className="demo-tag"><span className="demo-dot" /> SAMPLE JOURNAL</span></div>
-      <section className="overview-hero">
-        <div><span className="hero-kicker"><Sparkles size={13} /> YOUR WEEK, AT A GLANCE</span><h2>Welcome back, {name}.</h2><p>{studentGreeting} Where would you like to begin?</p><ModeSwitch onNavigate={onNavigate} /></div>
-        <div className="overview-orb" aria-hidden="true"><span className="orb-ring" /><span className="orb-center"><ActivityChart data={weekData} compact /></span><span className="orb-caption">YOUR RHYTHM</span></div>
-      </section>
-      <div className="stat-grid overview-stat-grid">
-        <StatCard icon={Clock3} label="Focused today" value={durationLabel(overallMinutes)} note="across both modes" tone="lavender" />
-        <StatCard icon={Timer} label="Sessions today" value={String(sessions.filter((session) => sameDay(new Date(session.sessionDate), today)).length)} note="small steps count" tone="peach" />
-        <StatCard icon={TrendingUp} label="This week" value={durationLabel(weekFocus)} note="focused minutes" tone="sage" />
+    return (
+      <div className="dashboard-page overview-page">
+        <div className="page-title-row">
+          <div>
+            <span className="eyebrow">{mode === 'student' ? 'YOUR STUDENT RADARR' : 'YOUR DEVELOPER RADARR'}</span>
+            <h1>A little more in tune.</h1>
+            <p>Notice your rhythm, then make space for what you need.</p>
+          </div>
+          <span className="demo-tag"><span className="demo-dot" /> {mode === 'student' ? 'STUDENT MODE' : 'DEVELOPER MODE'}</span>
+        </div>
+        <section className="overview-hero">
+          <div>
+            <span className="hero-kicker"><Sparkles size={13} /> YOUR WEEK, AT A GLANCE</span>
+            <h2>Welcome back, {name}.</h2>
+            <p>{studentGreeting} Where would you like to begin?</p>
+            <ModeSwitch activeMode={mode} onModeChange={onModeChange} />
+          </div>
+          <div className="overview-orb" aria-hidden="true">
+            <span className="orb-ring" />
+            <span className="orb-center"><ActivityChart data={weekData} compact mode={mode} /></span>
+            <span className="orb-caption">{mode === 'student' ? 'STUDY RHYTHM' : 'DEV RHYTHM'}</span>
+          </div>
+        </section>
+        <div className="stat-grid overview-stat-grid">
+          <StatCard
+            icon={Clock3}
+            label={mode === 'student' ? 'Focused today' : 'Coding today'}
+            value={durationLabel(focusToday)}
+            note={mode === 'student' ? 'student study time' : 'developer focus time'}
+            tone="lavender"
+          />
+          <StatCard
+            icon={Timer}
+            label="Sessions today"
+            value={String(todaysRecords.length)}
+            note="small steps count"
+            tone="peach"
+          />
+          <StatCard
+            icon={TrendingUp}
+            label="This week"
+            value={durationLabel(weekFocus)}
+            note={mode === 'student' ? 'study minutes' : 'coding minutes'}
+            tone="sage"
+          />
+        </div>
+        <div className="dashboard-grid overview-grid">
+          {mode === 'developer' && <ActivityTestWidget />}
+          <section className="panel activity-panel">
+            <div className="panel-heading">
+              <div>
+                <span className="eyebrow">THE LAST 7 DAYS</span>
+                <h2>{mode === 'student' ? 'Your study activity' : 'Your coding activity'}</h2>
+              </div>
+              <button type="button" className="text-action" onClick={() => onNavigate('insights')}>
+                More insights <ArrowRight size={14} />
+              </button>
+            </div>
+            <ActivityChart data={weekData} mode={mode} />
+          </section>
+          <CfiCard sessions={records} />
+          <section className="panel distribution-panel">
+            <div className="panel-heading">
+              <div>
+                <span className="eyebrow">A LITTLE CONTEXT</span>
+                <h2>{mode === 'student' ? 'By subject' : 'By project'}</h2>
+              </div>
+              <button type="button" className="icon-button quiet-button" onClick={() => onNavigate('insights')} aria-label="View detailed insights">
+                <ArrowRight size={16} />
+              </button>
+            </div>
+            <SubjectChart data={distribution} mode={mode} />
+          </section>
+          {mode === 'student' ? (
+            <TaskPreview tasks={tasks} onToggle={onToggleTask} onAdd={onAddTask} onEdit={onEditTask} onDelete={onDeleteTask} />
+          ) : (
+            <>
+              <ProjectPreview projects={projects} sessions={records} onAdd={onAddProject} onEdit={onEditProject} onArchive={onArchiveProject} onDelete={onDeleteProject} />
+              <WorkLogPreview logs={workLogs} onAdd={onAddWorkLog} onEdit={onEditWorkLog} onDelete={onDeleteWorkLog} />
+            </>
+          )}
+          <section className="panel recent-panel">
+            <div className="panel-heading">
+              <div>
+                <span className="eyebrow">JUST CHECKING IN</span>
+                <h2>{mode === 'student' ? 'Recent study sessions' : 'Recent work sessions'}</h2>
+              </div>
+              <button type="button" className="text-action" onClick={() => onNavigate('sessions')}>
+                View all <ArrowRight size={14} />
+              </button>
+            </div>
+            <div className="session-list">
+              {recent.length ? (
+                recent.map((session) => <SessionRow key={session.id} session={session} mode={mode} />)
+              ) : (
+                <div className="inline-empty">Your next session will show up here.</div>
+              )}
+            </div>
+          </section>
+          <section className="panel quickstart-panel">
+            <div className="panel-heading">
+              <div>
+                <span className="eyebrow">START WHERE YOU ARE</span>
+                <h2>{mode === 'student' ? 'Student focus' : 'Developer focus'}</h2>
+              </div>
+              <span className="sparkle-mark"><Sparkles size={17} /></span>
+            </div>
+            {mode === 'student' ? (
+              <button className="quickstart-option study-option" type="button" onClick={() => onStart('student')}>
+                <span className="quickstart-icon"><BookOpen size={18} /></span>
+                <span><strong>Study something</strong><small>Make a little progress, gently.</small></span>
+                <ArrowRight size={16} />
+              </button>
+            ) : (
+              <button className="quickstart-option dev-option" type="button" onClick={() => onStart('developer')}>
+                <span className="quickstart-icon"><Code2 size={18} /></span>
+                <span><strong>Build something</strong><small>Focus on the next right thing.</small></span>
+                <ArrowRight size={16} />
+              </button>
+            )}
+            <div className="quiet-reminder">
+              <Lightbulb size={15} />
+              <span>
+                {latestSession && latestSession.perceivedFatigue >= 6
+                  ? 'Your last check-in felt heavy. Try a lighter next step.'
+                  : latestSession && latestSession.sleepHours < 7
+                    ? `You logged ${latestSession.sleepHours} hours of sleep. Leave a little breathing room today.`
+                    : 'Small breaks are part of the work.'}
+              </span>
+              <button type="button" onClick={() => onNavigate('recommendations')}>
+                Recovery notes <ArrowRight size={12} />
+              </button>
+            </div>
+          </section>
+        </div>
       </div>
-      <div className="dashboard-grid overview-grid">
-        <section className="panel activity-panel"><div className="panel-heading"><div><span className="eyebrow">THE LAST 7 DAYS</span><h2>Your activity</h2></div><button type="button" className="text-action" onClick={() => onNavigate('insights')}>More insights <ArrowRight size={14} /></button></div><ActivityChart data={weekData} /></section>
-        <CfiCard sessions={sessions} />
-        <section className="panel recent-panel"><div className="panel-heading"><div><span className="eyebrow">JUST CHECKING IN</span><h2>Recent sessions</h2></div><button type="button" className="text-action" onClick={() => onNavigate('sessions')}>View all <ArrowRight size={14} /></button></div><div className="session-list">{[...sessions].sort((a, b) => b.sessionDate.localeCompare(a.sessionDate)).slice(0, 4).map((session) => <SessionRow key={session.id} session={session} mode={session.mode} />)}</div></section>
-        <section className="panel quickstart-panel"><div className="panel-heading"><div><span className="eyebrow">START WHERE YOU ARE</span><h2>Choose your space</h2></div><span className="sparkle-mark"><Sparkles size={17} /></span></div><button className="quickstart-option study-option" type="button" onClick={() => onStart('student')}><span className="quickstart-icon"><BookOpen size={18} /></span><span><strong>Study something</strong><small>Make a little progress, gently.</small></span><ArrowRight size={16} /></button><button className="quickstart-option dev-option" type="button" onClick={() => onStart('developer')}><span className="quickstart-icon"><Code2 size={18} /></span><span><strong>Build something</strong><small>Focus on the next right thing.</small></span><ArrowRight size={16} /></button><div className="quiet-reminder"><Lightbulb size={15} /><span>{latestSession && latestSession.perceivedFatigue >= 6 ? 'Your last check-in felt heavy. Try a lighter next step.' : latestSession && latestSession.sleepHours < 7 ? `You logged ${latestSession.sleepHours} hours of sleep. Leave a little breathing room today.` : 'Small breaks are part of the work.'}</span><button type="button" onClick={() => onNavigate('recommendations')}>Recovery notes <ArrowRight size={12} /></button></div></section>
-      </div>
-    </div>
+    )
   }
 
   return <div className={`dashboard-page mode-dashboard ${mode}-dashboard`}>
@@ -331,9 +489,9 @@ export function Dashboard(props: DashboardProps) {
     <div className="dashboard-grid mode-grid">
       {mode === 'developer' && <ActivityTestWidget />}
       <section className="panel activity-panel"><div className="panel-heading"><div><span className="eyebrow">WEEKLY RHYTHM</span><h2>{mode === 'student' ? 'Your study minutes' : 'Coding activity'}</h2></div><span className="chart-total"><strong>{durationLabel(weekFocus)}</strong><small>this week</small></span></div><ActivityChart data={weekData} mode={mode} /></section>
-      <CfiCard sessions={sessions} />
+      <CfiCard sessions={records} />
       <section className="panel distribution-panel"><div className="panel-heading"><div><span className="eyebrow">A LITTLE CONTEXT</span><h2>{mode === 'student' ? 'By subject' : 'By project'}</h2></div><button type="button" className="icon-button quiet-button" onClick={() => onNavigate('insights')} aria-label="View detailed insights"><ArrowRight size={16} /></button></div><SubjectChart data={distribution} mode={mode} /></section>
-      {mode === 'student' ? <TaskPreview tasks={tasks} onToggle={onToggleTask} onAdd={onAddTask} onEdit={onEditTask} onDelete={onDeleteTask} /> : <ProjectPreview projects={projects} sessions={sessions} onAdd={onAddProject} onEdit={onEditProject} onArchive={onArchiveProject} onDelete={onDeleteProject} />}
+      {mode === 'student' ? <TaskPreview tasks={tasks} onToggle={onToggleTask} onAdd={onAddTask} onEdit={onEditTask} onDelete={onDeleteTask} /> : <ProjectPreview projects={projects} sessions={records} onAdd={onAddProject} onEdit={onEditProject} onArchive={onArchiveProject} onDelete={onDeleteProject} />}
       {mode === 'developer' && <WorkLogPreview logs={workLogs} onAdd={onAddWorkLog} onEdit={onEditWorkLog} onDelete={onDeleteWorkLog} />}
       <section className="panel recent-panel mode-recent-panel"><div className="panel-heading"><div><span className="eyebrow">THE LATEST</span><h2>{mode === 'student' ? 'Recent study sessions' : 'Recent work sessions'}</h2></div><button type="button" className="text-action" onClick={() => onNavigate('sessions')}>View history <ArrowRight size={14} /></button></div><div className="session-list">{recent.length ? recent.map((session) => <SessionRow key={session.id} session={session} mode={mode} />) : <div className="inline-empty">Your next session will show up here.</div>}</div></section>
       {mode === 'developer' && <section className="panel recovery-panel"><div className="recovery-icon"><Lightbulb size={17} /></div><div><span className="eyebrow">RECOVERY CONSOLE</span><h2>Protect your next hour.</h2><p>{recentLogs[0]?.perceivedFatigue && recentLogs[0].perceivedFatigue >= 6 ? 'Your last check-in felt a little heavy. Try switching to a lighter task or stepping away for a few minutes.' : 'You have been showing up consistently. A short reset now can make the next focus block feel clearer.'}</p></div><button type="button" className="text-action" onClick={() => onNavigate('recommendations')}>View suggestions <ArrowRight size={14} /></button></section>}

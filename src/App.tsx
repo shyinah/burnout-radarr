@@ -171,9 +171,24 @@ function App() {
     return () => window.clearInterval(interval)
   }, [timer?.status, timer?.phase, data.preferences.breakReminders, data.preferences.notifications, reminderSnoozeAt])
 
+  function handleModeChange(newMode: UserMode) {
+    setActiveMode(newMode)
+    setData((current) => ({
+      ...current,
+      preferences: {
+        ...current.preferences,
+        defaultMode: newMode,
+      },
+    }))
+  }
+
   function navigate(nextPage: AppPage) {
-    setPage(nextPage)
-    if (nextPage === 'student' || nextPage === 'developer') setActiveMode(nextPage)
+    if (nextPage === 'student' || nextPage === 'developer') {
+      handleModeChange(nextPage)
+      setPage('overview')
+    } else {
+      setPage(nextPage)
+    }
     setProfileOpen(false)
   }
 
@@ -345,7 +360,7 @@ function App() {
     setToast('Demo journal reset on this device.')
   }
 
-  const currentMode: UserMode = page === 'student' || page === 'developer' ? page : activeMode
+  const currentMode: UserMode = activeMode
   const pageTitle = pageTitles[page]
 
   return <div className="app-shell" data-mode={currentMode} data-theme={data.preferences.theme}>
@@ -354,7 +369,26 @@ function App() {
       <header className="topbar">
         <div className="breadcrumbs"><span>radarr</span><span className="breadcrumb-slash">/</span><strong>{pageTitle}</strong></div>
         <div className="topbar-actions">
-          <div className="topbar-mode-switch" aria-label="Choose mode"><button type="button" className={currentMode === 'student' ? 'selected' : ''} onClick={() => navigate('student')}><span className="mode-switch-dot student-dot" /> Study</button><button type="button" className={currentMode === 'developer' ? 'selected' : ''} onClick={() => navigate('developer')}><span className="mode-switch-dot dev-dot" /> Dev</button></div>
+          <div className="topbar-mode-switch" aria-label="Toggle active mode" role="tablist">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeMode === 'student'}
+              className={activeMode === 'student' ? 'selected' : ''}
+              onClick={() => handleModeChange('student')}
+            >
+              <span className="mode-switch-dot student-dot" /> Student Mode
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeMode === 'developer'}
+              className={activeMode === 'developer' ? 'selected' : ''}
+              onClick={() => handleModeChange('developer')}
+            >
+              <span className="mode-switch-dot dev-dot" /> Developer Mode
+            </button>
+          </div>
           <button type="button" className="icon-button topbar-icon" onClick={() => setData((current) => ({ ...current, preferences: { ...current.preferences, theme: current.preferences.theme === 'dark' ? 'light' : 'dark' } }))} aria-label={data.preferences.theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'} title="Toggle theme">{data.preferences.theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}</button>
           {!currentUser && (
             <button
@@ -372,6 +406,8 @@ function App() {
       <main className="app-main">
         <Suspense fallback={<div className="page-skeleton" role="status">Opening your workspace…</div>}>{page === 'overview' || page === 'student' || page === 'developer' ? <Dashboard
           view={page}
+          activeMode={currentMode}
+          onModeChange={handleModeChange}
           name={data.preferences.name || 'friend'}
           sessions={data.sessions}
           tasks={data.tasks}
@@ -390,8 +426,8 @@ function App() {
           onAddWorkLog={() => openEntry('worklog')}
           onEditWorkLog={(log) => openEntry('worklog', log)}
           onDeleteWorkLog={deleteWorkLog}
-        /> : page === 'sessions' ? <HistoryPage sessions={data.sessions} onOpenSession={setSelectedSession} />
-          : page === 'insights' ? <InsightsPage sessions={data.sessions} />
+        /> : page === 'sessions' ? <HistoryPage sessions={data.sessions} activeMode={currentMode} onOpenSession={setSelectedSession} />
+          : page === 'insights' ? <InsightsPage sessions={data.sessions} mode={currentMode} />
             : page === 'recommendations' ? <RecommendationsPage sessions={data.sessions} mode={currentMode} onStart={(mode) => setSetupMode(mode || currentMode)} />
               : <SettingsPage
                 preferences={data.preferences}
