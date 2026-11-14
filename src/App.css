@@ -842,3 +842,196 @@ button { -webkit-tap-highlight-color: transparent; }
 .activity-test-panel .text-slate-400 {
   color: #94a3b8 !important;
 }
+
+/* Post-session fatigue modal */
+.post-session-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background-color: rgba(15, 23, 42, 0.25);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.post-session-backdrop .rounded-3xl {
+  background-color: #ffffff !important;
+  border-radius: 1.5rem !important;
+  padding: 2rem !important;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04) !important;
+  max-width: 28rem !important;
+  width: 100% !important;
+  position: relative !important;
+  border: 1px solid #f1f5f9 !important;
+  color: #1e293b !important;
+  box-sizing: border-box !important;
+  text-align: left !important;
+}
+
+.post-session-backdrop .text-\[11px\] {
+  font-size: 11px !important;
+}
+
+.post-session-backdrop .tracking-wider {
+  letter-spacing: 0.05em !important;
+}
+
+.post-session-backdrop .tracking-wide {
+  letter-spacing: 0.025em !important;
+}
+
+.post-session-backdrop .uppercase {
+  text-transform: uppercase !important;
+}
+
+.post-session-backdrop .text-slate-400 {
+  color: #94a3b8 !important;
+}
+
+.post-session-backdrop .text-slate-500 {
+  color: #64748b !important;
+}
+
+.post-session-backdrop .text-slate-700 {
+  color: #334155 !important;
+}
+
+.post-session-backdrop .text-slate-800 {
+  color: #1e293b !important;
+}
+
+.post-session-backdrop .leading-tight {
+  line-height: 1.25 !important;
+}
+
+.post-session-backdrop .mb-6 {
+  margin-bottom: 1.5rem !important;
+}
+
+.post-session-backdrop .leading-relaxed {
+  line-height: 1.625 !important;
+}
+
+.post-session-backdrop .flex {
+  display: flex !important;
+}
+
+.post-session-backdrop .justify-between {
+  justify-content: space-between !important;
+}
+
+.post-session-backdrop .items-center {
+  align-items: center !important;
+}
+
+.post-session-backdrop .w-full {
+  width: 100% !important;
+}
+
+.post-session-backdrop input[type="range"] {
+  width: 100% !important;
+  height: 0.5rem !important;
+  background-color: #f1f5f9 !important;
+  border-radius: 0.5rem !important;
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  cursor: pointer !important;
+  accent-color: #1e293b !important;
+  margin: 0 !important;
+}
+
+.post-session-backdrop select {
+  width: 100% !important;
+  background-color: #f8f9fa !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 0.75rem !important;
+  padding: 0.75rem 1rem !important;
+  color: #334155 !important;
+  font-size: 0.875rem !important;
+  outline: none !important;
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  cursor: pointer !important;
+  box-sizing: border-box !important;
+  transition: all 0.2s ease !important;
+}
+
+.post-session-backdrop select:focus {
+  border-color: #94a3b8 !important;
+  box-shadow: 0 0 0 1px #e2e8f0 !important;
+}
+
+.post-session-backdrop .justify-end {
+  justify-content: flex-end !important;
+}
+
+.post-session-backdrop .gap-3 {
+  gap: 0.75rem !important;
+}
+
+.post-session-backdrop .pt-6 {
+  padding-top: 1.5rem !important;
+}
+
+.post-session-backdrop .border-t {
+  border-top-width: 1px !important;
+}
+
+.post-session-backdrop .border-slate-50 {
+  border-top: 1px solid #f8fafc !important;
+}
+
+.post-session-backdrop button.bg-slate-800 {
+  background-color: #1e293b !important;
+  color: #ffffff !important;
+  padding: 0.625rem 1.5rem !important;
+  border-radius: 0.75rem !important;
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  border: none !important;
+  cursor: pointer !important;
+  transition: background-color 0.15s ease !important;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;
+}
+
+.post-session-backdrop button.bg-slate-800:hover {
+  background-color: #334155 !important;
+}
+
+.post-session-backdrop button.text-slate-500 {
+  background: transparent !important;
+  color: #64748b !important;
+  padding: 0.625rem 1.25rem !important;
+  border-radius: 0.75rem !important;
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  border: none !important;
+  cursor: pointer !important;
+  transition: color 0.15s ease, background-color 0.15s ease !important;
+}
+
+.post-session-backdrop button.text-slate-500:hover {
+  background-color: #f8fafc !important;
+  color: #334155 !important;
+}
+
+.post-session-backdrop button.absolute {
+  position: absolute !important;
+  top: 1.5rem !important;
+  right: 1.5rem !important;
+  border: none !important;
+  background: transparent !important;
+  cursor: pointer !important;
+  padding: 0.5rem !important;
+  border-radius: 9999px !important;
+  color: #94a3b8 !important;
+  transition: color 0.15s ease, background-color 0.15s ease !important;
+}
+
+.post-session-backdrop button.absolute:hover {
+  color: #475569 !important;
+  background-color: #f8fafc !important;
+}

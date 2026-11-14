@@ -79,7 +79,7 @@ interface FocusTimerDialogProps {
   onResume: () => void
   onEnd: () => void
   onTakeBreak: () => void
-  onSave: (feeling: string) => void
+  onSave: (feeling: string, endFatigue?: number) => void
   onClose: () => void
   reminderVisible: boolean
   onSnoozeReminder: () => void
@@ -91,12 +91,32 @@ const formatElapsed = (seconds: number) => `${Math.floor(seconds / 60)}m`
 
 export function FocusTimerDialog({ timer, onPause, onResume, onEnd, onTakeBreak, onSave, onClose, reminderVisible, onSnoozeReminder, onDismissReminder }: FocusTimerDialogProps) {
   const [feeling, setFeeling] = useState('Steady')
+  const [showEndModal, setShowEndModal] = useState(false)
+  const [endFatigue, setEndFatigue] = useState<number>(timer.draft.perceivedFatigue ?? 4)
   const totalFocus = timer.draft.focusMinutes * 60
   const focusRemaining = timer.phase === 'focus' ? timer.secondsLeft : timer.focusSecondsLeft
   const progress = Math.min(100, Math.max(0, ((totalFocus - focusRemaining) / totalFocus) * 100))
   const isFinished = timer.status === 'finished'
   const showingBreak = timer.phase === 'break' && !isFinished
   const title = isFinished ? (timer.completed ? 'Block complete.' : 'Session wrapped.') : showingBreak ? 'Step away for a moment.' : timer.status === 'paused' ? 'Paused. You are right on track.' : 'You are in your focus zone.'
+
+  function handleEndSession() {
+    onPause()
+    setShowEndModal(true)
+  }
+
+  function confirmEndSession() {
+    setShowEndModal(false)
+    onEnd()
+    onSave(feeling, endFatigue)
+  }
+
+  function cancelEndModal() {
+    setShowEndModal(false)
+    if (timer.status === 'running') {
+      onResume()
+    }
+  }
 
   return <div className="dialog-backdrop timer-backdrop" role="presentation">
     <section className={`dialog-card timer-dialog ${timer.draft.mode}-dialog${isFinished ? ' timer-finished' : ''}`} role="dialog" aria-modal="true" aria-labelledby="timer-title">
@@ -110,13 +130,90 @@ export function FocusTimerDialog({ timer, onPause, onResume, onEnd, onTakeBreak,
         <div className="timer-ring"><span className="timer-clock">{timerFormat(timer.secondsLeft)}</span><span className="timer-clock-label">{showingBreak ? 'RESET' : timer.status === 'paused' ? 'PAUSED' : isFinished ? 'DONE' : 'REMAINING'}</span></div>
       </div>
       <div className="timer-stats"><span><small>FOCUS</small><strong>{formatElapsed(timer.elapsedFocusSeconds)} / {timer.draft.focusMinutes}m</strong></span><span><small>BREAK PLAN</small><strong>{timer.draft.breakMinutes}m</strong></span><span><small>STATUS</small><strong>{timer.status.toUpperCase()}</strong></span></div>
-      {isFinished ? <div className="finish-flow"><label className="field-label">How did this session feel?<select value={feeling} onChange={(event) => setFeeling(event.target.value)}><option>Steady</option><option>Focused</option><option>A little tired</option><option>More energized</option><option>Challenging</option></select></label><p className="cfi-pending-callout"><Sparkles size={14} /> Session saved locally. CFI scoring will be available when the shared engine is connected.</p><button type="button" className={`button-primary setup-submit ${timer.draft.mode === 'developer' ? 'developer-primary' : 'student-primary'}`} onClick={() => onSave(feeling)}><Check size={16} /> Save session</button></div> : <div className="timer-actions">
+      {isFinished ? <div className="finish-flow"><label className="field-label">How did this session feel?<select value={feeling} onChange={(event) => setFeeling(event.target.value)}><option>Steady</option><option>Focused</option><option>A little tired</option><option>More energized</option><option>Challenging</option></select></label><p className="cfi-pending-callout"><Sparkles size={14} /> Session saved locally. CFI scoring will be available when the shared engine is connected.</p><button type="button" className={`button-primary setup-submit ${timer.draft.mode === 'developer' ? 'developer-primary' : 'student-primary'}`} onClick={handleEndSession}><Check size={16} /> Save session</button></div> : <div className="timer-actions">
         {timer.status === 'running' ? <button type="button" className="button-primary timer-main-action" onClick={onPause}><Pause size={16} /> Pause</button> : <button type="button" className="button-primary timer-main-action" onClick={onResume}><Play size={16} /> Resume</button>}
         <button type="button" className="button-secondary" onClick={onTakeBreak}><Coffee size={16} /> {showingBreak ? 'End break' : 'Take a break'}</button>
-        <button type="button" className="timer-end-button" onClick={onEnd}><Square size={14} /> End session</button>
+        <button type="button" className="timer-end-button" onClick={handleEndSession}><Square size={14} /> End session</button>
       </div>}
       {reminderVisible && !isFinished && <div className="break-reminder" role="status"><span className="reminder-icon"><Coffee size={16} /></span><span><strong>Quick reset?</strong><small>Stretch, sip some water, or rest your eyes.</small></span><button type="button" onClick={onTakeBreak} aria-label="Start a break"><Play size={14} /></button><button type="button" onClick={onSnoozeReminder} aria-label="Snooze break reminder">Snooze</button><button type="button" className="reminder-dismiss" onClick={onDismissReminder} aria-label="Dismiss reminder"><X size={14} /></button></div>}
       <div className="timer-footer"><Timer size={13} /> A mindful estimate. No activity is tracked automatically.</div>
     </section>
+
+    {showEndModal && (
+      <div className="post-session-backdrop fixed inset-0 bg-slate-900/20 backdrop-blur-sm z-40 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="end-fatigue-title">
+        <div className="bg-white rounded-3xl p-8 shadow-xl max-w-md w-full relative z-50 border border-slate-100 text-slate-800">
+          <button
+            type="button"
+            onClick={cancelEndModal}
+            className="absolute top-6 right-6 text-slate-400 hover:text-slate-600 p-2 rounded-full hover:bg-slate-50 transition-colors"
+            aria-label="Cancel"
+          >
+            <X size={18} />
+          </button>
+
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2 block">
+            SESSION CHECK-OUT
+          </span>
+
+          <h3 id="end-fatigue-title" className="text-xl font-semibold text-slate-800 mb-6 leading-tight">
+            Session complete. How is your fatigue level now?
+          </h3>
+
+          <div className="mb-6">
+            <div className="flex justify-between items-center mb-3">
+              <span className="font-medium text-slate-700">Post-Session Fatigue</span>
+              <span className="font-bold text-slate-800">{endFatigue} / 10</span>
+            </div>
+            <input
+              aria-label={`Post-session fatigue, ${endFatigue} out of 10`}
+              type="range"
+              min={1}
+              max={10}
+              value={endFatigue}
+              onChange={(event) => setEndFatigue(Number(event.target.value))}
+              className="w-full h-2 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-slate-800"
+            />
+            <div className="flex justify-between w-full text-[11px] font-medium text-slate-400 mt-2 uppercase tracking-wide">
+              <span>Plenty of energy</span>
+              <span>Need a pause</span>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mt-6 mb-2">
+              How did this session feel?
+            </label>
+            <select
+              value={feeling}
+              onChange={(event) => setFeeling(event.target.value)}
+              className="w-full bg-[#F8F9FA] border border-slate-200 rounded-xl px-4 py-3 text-slate-700 outline-none focus:border-slate-400 focus:ring-1 focus:ring-slate-200 transition-all appearance-none"
+            >
+              <option>Steady</option>
+              <option>Focused</option>
+              <option>A little tired</option>
+              <option>More energized</option>
+              <option>Challenging</option>
+            </select>
+          </div>
+
+          <div className="flex justify-end gap-3 mt-8 pt-6 border-t border-slate-50">
+            <button
+              type="button"
+              onClick={cancelEndModal}
+              className="px-5 py-2.5 rounded-xl text-sm font-medium text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={confirmEndSession}
+              className="px-6 py-2.5 rounded-xl text-sm font-medium bg-slate-800 text-white hover:bg-slate-700 shadow-sm transition-colors"
+            >
+              Save &amp; Finish
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
   </div>
 }
