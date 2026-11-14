@@ -186,12 +186,12 @@ export async function saveSessionToCloud(
 /**
  * Loads user profile data (display name and theme preference) from public.profiles.
  */
-export async function fetchUserProfile(userId: string): Promise<{ displayName?: string; theme?: string } | null> {
+export async function fetchUserProfile(userId: string): Promise<{ displayName?: string; theme?: string; defaultMode?: UserMode } | null> {
   if (!isSupabaseConfigured) return null
   try {
     const { data, error } = await supabase
       .from('profiles')
-      .select('display_name, theme')
+      .select('display_name, theme, default_mode')
       .eq('id', userId)
       .maybeSingle()
 
@@ -199,6 +199,7 @@ export async function fetchUserProfile(userId: string): Promise<{ displayName?: 
     return {
       displayName: data.display_name,
       theme: data.theme,
+      defaultMode: data.default_mode as UserMode | undefined,
     }
   } catch {
     return null

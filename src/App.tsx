@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
-import { ChevronDown, Cloud, Moon, MoreHorizontal, Sun } from 'lucide-react'
+import { Activity, BookOpen, ChevronDown, Cloud, Code2, Moon, MoreHorizontal, Sun } from 'lucide-react'
 import { Dashboard } from './components/Dashboard'
 import { EntryDialog, type EntryKind, type EntryRecord, type EntryValues } from './components/EntryDialog'
 const HistoryPage = lazy(() => import('./components/InsightsPages').then((module) => ({ default: module.HistoryPage })))
@@ -9,7 +9,7 @@ const SettingsPage = lazy(() => import('./components/InsightsPages').then((modul
 import { SessionSetupDialog, FocusTimerDialog, type TimerState } from './components/SessionDialogs'
 import { SessionDetailsDialog } from './components/SessionDetailsDialog'
 import { Sidebar } from './components/Sidebar'
-import { AuthDialog } from './components/AuthDialog'
+import { AuthView } from './components/AuthView'
 import {
   DEFAULT_PREFERENCES,
   type AppData,
@@ -22,7 +22,7 @@ import {
   type WorkLogItem,
 } from './services/app-state'
 import { evaluateWithCFI } from './services/cfi'
-import { loadAppData, resetAppData, saveAppData, backupGuestData, restoreGuestData } from './services/storage'
+import { loadAppData, resetAppData, saveAppData, backupGuestData } from './services/storage'
 import { supabase } from './services/supabase'
 import {
   fetchCloudSessions,
@@ -35,9 +35,9 @@ import type { User } from '@supabase/supabase-js'
 import './App.css'
 
 const pageTitles: Record<AppPage, string> = {
-  overview: 'Overview',
-  student: 'Your Study Space',
-  developer: 'Developer Command Centre',
+  overview: 'Dashboard',
+  student: 'Study Space',
+  developer: 'Developer Command',
   sessions: 'Focus sessions',
   insights: 'Insights',
   recommendations: 'Recovery notes',
@@ -45,6 +45,20 @@ const pageTitles: Record<AppPage, string> = {
 }
 
 const createId = () => crypto.randomUUID()
+
+function createEmptyUserData(name: string, defaultMode: UserMode = 'student'): AppData {
+  return {
+    preferences: {
+      ...DEFAULT_PREFERENCES,
+      name,
+      defaultMode,
+    },
+    sessions: [],
+    tasks: [],
+    projects: [],
+    workLogs: [],
+  }
+}
 
 function App() {
   const [data, setData] = useState<AppData>(() => loadAppData())
@@ -60,7 +74,8 @@ function App() {
   const [toast, setToast] = useState('')
   const [isSaving, setIsSaving] = useState(false)
   const [currentUser, setCurrentUser] = useState<User | null>(null)
-  const [authOpen, setAuthOpen] = useState(false)
+  const [authLoading, setAuthLoading] = useState(true)
+  const [isPasswordRecovery, setIsPasswordRecovery] = useState(false)
 
   async function syncFromCloud(user: User) {
     try {
@@ -72,6 +87,7 @@ function App() {
         user.email?.split('@')[0] ||
         'Friend'
 
+      const userDefaultMode = profile?.defaultMode || (user.user_metadata?.default_mode as UserMode) || 'student'
       const { sessions: cloudSessions, error } = await fetchCloudSessions(user.id)
 
       if (error) {
@@ -86,8 +102,10 @@ function App() {
         preferences: {
           ...current.preferences,
           name: userDisplayName,
+          defaultMode: userDefaultMode,
         },
       }))
+      setActiveMode(userDefaultMode)
     } catch (err) {
       console.error('Error syncing from cloud:', err)
     }
@@ -99,26 +117,33 @@ function App() {
       const user = session?.user ?? null
       setCurrentUser(user)
       if (user) {
-        syncFromCloud(user)
+        syncFromCloud(user).finally(() => setAuthLoading(false))
+      } else {
+        setAuthLoading(false)
       }
+    }).catch((err) => {
+      console.error('Auth session initialization error:', err)
+      setAuthLoading(false)
     })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       const nextUser = session?.user ?? null
       setCurrentUser(nextUser)
 
-      if (event === 'SIGNED_IN' && nextUser) {
-        setData((current) => {
-          backupGuestData(current)
-          return current
-        })
+      if (event === 'PASSWORD_RECOVERY') {
+        setIsPasswordRecovery(true)
+      } else if (event === 'SIGNED_IN' && nextUser) {
+        setIsPasswordRecovery(false)
         await syncFromCloud(nextUser)
         const name = nextUser.user_metadata?.full_name || nextUser.email || 'friend'
         setToast(`Signed in. Cloud sessions loaded for ${name}.`)
       } else if (event === 'SIGNED_OUT') {
-        const restored = restoreGuestData()
-        setData(restored)
-        setToast('Signed out. Local storage restored.')
+        setIsPasswordRecovery(false)
+        const blank = createEmptyUserData('Friend', 'student')
+        setData(blank)
+        setActiveMode('student')
+        setPage('overview')
+        setToast('Signed out successfully.')
       }
     })
 
@@ -171,9 +196,25 @@ function App() {
     return () => window.clearInterval(interval)
   }, [timer?.status, timer?.phase, data.preferences.breakReminders, data.preferences.notifications, reminderSnoozeAt])
 
+  function handleModeChange(nextMode: UserMode) {
+    if (nextMode === activeMode) return
+    setActiveMode(nextMode)
+    setData((current) => ({
+      ...current,
+      preferences: {
+        ...current.preferences,
+        defaultMode: nextMode,
+      },
+    }))
+  }
+
   function navigate(nextPage: AppPage) {
-    setPage(nextPage)
-    if (nextPage === 'student' || nextPage === 'developer') setActiveMode(nextPage)
+    if (nextPage === 'student' || nextPage === 'developer') {
+      handleModeChange(nextPage)
+      setPage('overview')
+    } else {
+      setPage(nextPage)
+    }
     setProfileOpen(false)
   }
 
@@ -251,7 +292,9 @@ function App() {
     setBreakReminder(false)
     setTimer((current) => {
       if (!current) return current
-      if (current.phase === 'break') return { ...current, phase: 'focus', secondsLeft: current.focusSecondsLeft }
+      if (current.phase === 'break') {
+        return { ...current, phase: 'focus', secondsLeft: current.focusSecondsLeft }
+      }
       return { ...current, phase: 'break', secondsLeft: current.draft.breakMinutes * 60 }
     })
   }
@@ -265,6 +308,11 @@ function App() {
     setProfileOpen(false)
     try {
       await supabase.auth.signOut()
+      setCurrentUser(null)
+      setData(createEmptyUserData('Friend', 'student'))
+      setActiveMode('student')
+      setPage('overview')
+      setToast('Signed out successfully.')
     } catch (err) {
       console.error('Logout error:', err)
     }
@@ -274,21 +322,20 @@ function App() {
     if (!timer || isSaving) return
     setIsSaving(true)
     try {
-      const resolvedEndFatigue = endFatigue ?? timer.draft.perceivedFatigue
+      const resolvedEndFatigue = endFatigue !== undefined ? endFatigue : timer.draft.perceivedFatigue
+
       const input: SessionInput = {
         mode: timer.draft.mode,
         focusMinutes: Math.max(1, Math.round(timer.elapsedFocusSeconds / 60)),
         breakMinutes: timer.draft.breakMinutes,
         sleepHours: timer.draft.sleepHours,
-        perceivedFatigue: timer.draft.perceivedFatigue,
-        endFatigue: resolvedEndFatigue,
+        perceivedFatigue: resolvedEndFatigue,
         sessionDate: new Date().toISOString(),
       }
       const cfiResult = await evaluateWithCFI(input)
 
-      // Requirement 5: Always use authenticated Supabase user ID. Never trust client-supplied userId.
       const authUser = await getAuthenticatedUser()
-      const effectiveUserId = authUser ? authUser.id : 'local-user'
+      const effectiveUserId = authUser ? authUser.id : (currentUser?.id || 'local-user')
 
       const session: SavedSession = {
         ...input,
@@ -318,7 +365,7 @@ function App() {
         if (cloudResult.success) {
           setToast(session.completed ? 'Session saved and synced to cloud.' : 'Session saved (ended early) and synced to cloud.')
         } else {
-          console.warn('Cloud sync error:', cloudResult.error)
+          console.warn('Cloud sync note:', cloudResult.error)
           setToast(session.completed ? 'Session saved locally (cloud sync offline).' : 'Session saved locally (ended early).')
         }
       } else {
@@ -345,55 +392,124 @@ function App() {
     setToast('Demo journal reset on this device.')
   }
 
-  const currentMode: UserMode = page === 'student' || page === 'developer' ? page : activeMode
-  const pageTitle = pageTitles[page]
-
-  return <div className="app-shell" data-mode={currentMode} data-theme={data.preferences.theme}>
-    <Sidebar activePage={page} onNavigate={navigate} mode={currentMode} />
-    <div className="main-column">
-      <header className="topbar">
-        <div className="breadcrumbs"><span>radarr</span><span className="breadcrumb-slash">/</span><strong>{pageTitle}</strong></div>
-        <div className="topbar-actions">
-          <div className="topbar-mode-switch" aria-label="Choose mode"><button type="button" className={currentMode === 'student' ? 'selected' : ''} onClick={() => navigate('student')}><span className="mode-switch-dot student-dot" /> Study</button><button type="button" className={currentMode === 'developer' ? 'selected' : ''} onClick={() => navigate('developer')}><span className="mode-switch-dot dev-dot" /> Dev</button></div>
-          <button type="button" className="icon-button topbar-icon" onClick={() => setData((current) => ({ ...current, preferences: { ...current.preferences, theme: current.preferences.theme === 'dark' ? 'light' : 'dark' } }))} aria-label={data.preferences.theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'} title="Toggle theme">{data.preferences.theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}</button>
-          {!currentUser && (
-            <button
-              type="button"
-              className="button-secondary topbar-auth-btn"
-              onClick={() => setAuthOpen(true)}
-              style={{ minHeight: '31px', padding: '0 10px', fontSize: '10px' }}
-            >
-              <Cloud size={14} /> Sign in
-            </button>
-          )}
-          <div className="profile-menu-wrap"><button type="button" className={`profile-trigger${profileOpen ? ' is-open' : ''}`} onClick={() => setProfileOpen((open) => !open)} aria-expanded={profileOpen} aria-haspopup="menu"><span className="profile-avatar">{data.preferences.name.trim().slice(0, 1).toUpperCase() || 'T'}</span><span className="profile-name">{data.preferences.name}</span>{currentUser && <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#7da58b', marginRight: '-2px' }} title="Cloud connected" />}<ChevronDown size={14} /></button>{profileOpen && <div className="profile-menu" role="menu"><div className="profile-menu-heading"><strong>{data.preferences.name}</strong><small>{currentUser ? currentUser.email : 'Personal journal (local)'}</small>{currentUser ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '9px', color: '#607f42', marginTop: '2px', fontWeight: 600 }}><span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#607f42' }} /> Cloud connected</span> : <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '9px', color: 'var(--muted)', marginTop: '2px' }}>Local storage mode</span>}</div><button type="button" role="menuitem" onClick={() => navigate('settings')}>Profile &amp; settings</button><button type="button" role="menuitem" onClick={() => { navigate('sessions'); setProfileOpen(false) }}>View session history</button>{currentUser ? <button type="button" role="menuitem" onClick={handleLogout} style={{ color: '#d94343' }}>Sign out</button> : <button type="button" role="menuitem" onClick={() => { setAuthOpen(true); setProfileOpen(false) }}>Sign in / Create account</button>}</div>}</div>
+  // Prevent unauthenticated users from accessing the main dashboard
+  if (authLoading) {
+    return (
+      <div className="auth-loading-screen" role="status">
+        <div className="auth-loading-card">
+          <span className="brand-mark"><Activity size={28} strokeWidth={2.4} /></span>
+          <span className="brand-copy" style={{ color: 'var(--muted)', fontSize: '12px' }}>Connecting to your workspace…</span>
         </div>
-      </header>
-      <main className="app-main">
-        <Suspense fallback={<div className="page-skeleton" role="status">Opening your workspace…</div>}>{page === 'overview' || page === 'student' || page === 'developer' ? <Dashboard
-          view={page}
-          name={data.preferences.name || 'friend'}
-          sessions={data.sessions}
-          tasks={data.tasks}
-          projects={data.projects}
-          workLogs={data.workLogs}
-          onNavigate={navigate}
-          onStart={(mode) => setSetupMode(mode)}
-          onToggleTask={toggleTask}
-          onAddTask={() => openEntry('task')}
-          onEditTask={(task) => openEntry('task', task)}
-          onDeleteTask={deleteTask}
-          onAddProject={() => openEntry('project')}
-          onEditProject={(project) => openEntry('project', project)}
-          onArchiveProject={archiveProject}
-          onDeleteProject={deleteProject}
-          onAddWorkLog={() => openEntry('worklog')}
-          onEditWorkLog={(log) => openEntry('worklog', log)}
-          onDeleteWorkLog={deleteWorkLog}
-        /> : page === 'sessions' ? <HistoryPage sessions={data.sessions} onOpenSession={setSelectedSession} />
-          : page === 'insights' ? <InsightsPage sessions={data.sessions} />
-            : page === 'recommendations' ? <RecommendationsPage sessions={data.sessions} mode={currentMode} onStart={(mode) => setSetupMode(mode || currentMode)} />
-              : <SettingsPage
+      </div>
+    )
+  }
+
+  if (!currentUser || isPasswordRecovery) {
+    return (
+      <AuthView
+        initialMode={isPasswordRecovery ? 'recovery' : 'signin'}
+        onSuccess={(user) => {
+          setIsPasswordRecovery(false)
+          setCurrentUser(user)
+          syncFromCloud(user)
+        }}
+      />
+    )
+  }
+
+  const currentMode: UserMode = activeMode
+  const pageTitle = page === 'overview'
+    ? (currentMode === 'student' ? 'Study Space' : 'Developer Command')
+    : pageTitles[page]
+
+  return (
+    <div className="app-shell" data-mode={currentMode} data-theme={data.preferences.theme}>
+      <Sidebar activePage={page} onNavigate={navigate} mode={currentMode} />
+      <div className="main-column">
+        <header className="topbar">
+          <div className="breadcrumbs"><span>radarr</span><span className="breadcrumb-slash">/</span><strong>{pageTitle}</strong></div>
+          <div className="topbar-actions">
+            <div className="topbar-mode-switch" role="group" aria-label="Choose mode">
+              <button
+                type="button"
+                className={`mode-switch-btn student-btn${currentMode === 'student' ? ' selected' : ''}`}
+                onClick={() => handleModeChange('student')}
+                aria-pressed={currentMode === 'student'}
+                title="Switch to Student / Study space"
+              >
+                <BookOpen size={13} strokeWidth={2.2} />
+                <span>Study</span>
+                <span className="mode-switch-dot student-dot" />
+              </button>
+              <button
+                type="button"
+                className={`mode-switch-btn dev-btn${currentMode === 'developer' ? ' selected' : ''}`}
+                onClick={() => handleModeChange('developer')}
+                aria-pressed={currentMode === 'developer'}
+                title="Switch to Developer command centre"
+              >
+                <Code2 size={13} strokeWidth={2.2} />
+                <span>Dev</span>
+                <span className="mode-switch-dot dev-dot" />
+              </button>
+            </div>
+            <button type="button" className="icon-button topbar-icon" onClick={() => setData((current) => ({ ...current, preferences: { ...current.preferences, theme: current.preferences.theme === 'dark' ? 'light' : 'dark' } }))} aria-label={data.preferences.theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'} title="Toggle theme">{data.preferences.theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}</button>
+            <div className="profile-menu-wrap">
+              <button type="button" className={`profile-trigger${profileOpen ? ' is-open' : ''}`} onClick={() => setProfileOpen((open) => !open)} aria-expanded={profileOpen} aria-haspopup="menu">
+                <span className="profile-avatar">{data.preferences.name.trim().slice(0, 1).toUpperCase() || 'T'}</span>
+                <span className="profile-name">{data.preferences.name}</span>
+                <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#7da58b', marginRight: '-2px' }} title="Cloud connected" />
+                <ChevronDown size={14} />
+              </button>
+              {profileOpen && (
+                <div className="profile-menu" role="menu">
+                  <div className="profile-menu-heading">
+                    <strong>{data.preferences.name}</strong>
+                    <small>{currentUser.email}</small>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '9px', color: '#607f42', marginTop: '2px', fontWeight: 600 }}>
+                      <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#607f42' }} /> Cloud connected
+                    </span>
+                  </div>
+                  <button type="button" role="menuitem" onClick={() => navigate('settings')}>Profile &amp; settings</button>
+                  <button type="button" role="menuitem" onClick={() => { navigate('sessions'); setProfileOpen(false) }}>View session history</button>
+                  <button type="button" role="menuitem" onClick={handleLogout} style={{ color: '#d94343' }}>Sign out</button>
+                </div>
+              )}
+            </div>
+          </div>
+        </header>
+        <main className="app-main">
+          <Suspense fallback={<div className="page-skeleton" role="status">Opening your workspace…</div>}>
+            {page === 'overview' || page === 'student' || page === 'developer' ? (
+              <Dashboard
+                view={currentMode}
+                name={data.preferences.name || 'friend'}
+                sessions={data.sessions}
+                tasks={data.tasks}
+                projects={data.projects}
+                workLogs={data.workLogs}
+                onNavigate={navigate}
+                onStart={(mode) => setSetupMode(mode)}
+                onToggleTask={toggleTask}
+                onAddTask={() => openEntry('task')}
+                onEditTask={(task) => openEntry('task', task)}
+                onDeleteTask={deleteTask}
+                onAddProject={() => openEntry('project')}
+                onEditProject={(project) => openEntry('project', project)}
+                onArchiveProject={archiveProject}
+                onDeleteProject={deleteProject}
+                onAddWorkLog={() => openEntry('worklog')}
+                onEditWorkLog={(log) => openEntry('worklog', log)}
+                onDeleteWorkLog={deleteWorkLog}
+              />
+            ) : page === 'sessions' ? (
+              <HistoryPage sessions={data.sessions} mode={currentMode} onOpenSession={setSelectedSession} />
+            ) : page === 'insights' ? (
+              <InsightsPage sessions={data.sessions} mode={currentMode} />
+            ) : page === 'recommendations' ? (
+              <RecommendationsPage sessions={data.sessions} mode={currentMode} onStart={(mode) => setSetupMode(mode || currentMode)} />
+            ) : (
+              <SettingsPage
                 preferences={data.preferences}
                 sessions={data.sessions}
                 user={currentUser}
@@ -406,38 +522,49 @@ function App() {
                 onResetSettings={resetSettings}
                 onResetData={resetData}
                 onSave={() => setToast('Settings saved on this device.')}
-                onOpenAuth={() => setAuthOpen(true)}
                 onSignOut={handleLogout}
-              />}</Suspense>
-      </main>
-      <footer className="app-disclaimer">CFI is an experimental wellness estimate, not a medical diagnosis.</footer>
-    </div>
+              />
+            )}
+          </Suspense>
+        </main>
+        <footer className="app-disclaimer">CFI is an experimental wellness estimate, not a medical diagnosis.</footer>
+      </div>
 
-    {setupMode && <SessionSetupDialog
-      mode={setupMode}
-      defaultFocus={data.preferences.focusMinutes}
-      defaultBreak={data.preferences.breakMinutes}
-      projects={data.projects}
-      onClose={() => setSetupMode(null)}
-      onStart={startSession}
-    />}
-    {timer && <FocusTimerDialog
-      timer={timer}
-      onPause={pauseTimer}
-      onResume={resumeTimer}
-      onEnd={endSession}
-      onTakeBreak={takeBreak}
-      onSave={saveSession}
-      onClose={() => { if (window.confirm('Discard this unsaved session?')) setTimer(null) }}
-      reminderVisible={breakReminder}
-      onSnoozeReminder={() => { setBreakReminder(false); setReminderSnoozeAt(timer.elapsedFocusSeconds + 5 * 60) }}
-      onDismissReminder={() => setBreakReminder(false)}
-    />}
-    {entry && <EntryDialog kind={entry.kind} item={entry.item} projects={data.projects} onClose={() => setEntry(null)} onSave={saveEntry} />}
-    {selectedSession && <SessionDetailsDialog session={selectedSession} onClose={() => setSelectedSession(null)} />}
-    {authOpen && <AuthDialog onClose={() => setAuthOpen(false)} onSuccess={() => setToast('Connected to Supabase cloud.')} />}
-    {toast && <div className="toast-message" role="status" aria-live="polite"><span className="toast-mark"><MoreHorizontal size={16} /></span>{toast}<button type="button" onClick={() => setToast('')} aria-label="Dismiss notification">×</button></div>}
-  </div>
+      {setupMode && (
+        <SessionSetupDialog
+          mode={setupMode}
+          defaultFocus={data.preferences.focusMinutes}
+          defaultBreak={data.preferences.breakMinutes}
+          projects={data.projects}
+          onClose={() => setSetupMode(null)}
+          onStart={startSession}
+        />
+      )}
+      {timer && (
+        <FocusTimerDialog
+          timer={timer}
+          onPause={pauseTimer}
+          onResume={resumeTimer}
+          onEnd={endSession}
+          onTakeBreak={takeBreak}
+          onSave={saveSession}
+          onClose={() => { if (window.confirm('Discard this unsaved session?')) setTimer(null) }}
+          reminderVisible={breakReminder}
+          onSnoozeReminder={() => { setBreakReminder(false); setReminderSnoozeAt(timer.elapsedFocusSeconds + 5 * 60) }}
+          onDismissReminder={() => setBreakReminder(false)}
+        />
+      )}
+      {entry && <EntryDialog kind={entry.kind} item={entry.item} projects={data.projects} onClose={() => setEntry(null)} onSave={saveEntry} />}
+      {selectedSession && <SessionDetailsDialog session={selectedSession} onClose={() => setSelectedSession(null)} />}
+      {toast && (
+        <div className="toast-message" role="status" aria-live="polite">
+          <span className="toast-mark"><MoreHorizontal size={16} /></span>
+          {toast}
+          <button type="button" onClick={() => setToast('')} aria-label="Dismiss notification">×</button>
+        </div>
+      )}
+    </div>
+  )
 }
 
 export default App
