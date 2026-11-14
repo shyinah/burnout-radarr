@@ -1040,3 +1040,446 @@ button { -webkit-tap-highlight-color: transparent; }
   color: #475569 !important;
   background-color: #f8fafc !important;
 }
+
+/* ==========================================================================
+   Dynamic Time-Aware Greeting Banner & Celestial Sky Animation
+   ========================================================================== */
+
+@keyframes celestial-pulse-morning {
+  0%, 100% {
+    box-shadow: 0 0 16px rgba(251, 191, 36, 0.4), 0 0 32px rgba(245, 158, 11, 0.2);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 24px rgba(251, 191, 36, 0.6), 0 0 44px rgba(245, 158, 11, 0.35);
+    transform: scale(1.06);
+  }
+}
+
+@keyframes celestial-pulse-noon {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(245, 158, 11, 0.5), 0 0 40px rgba(251, 191, 36, 0.3);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 28px rgba(245, 158, 11, 0.7), 0 0 52px rgba(251, 191, 36, 0.45);
+    transform: scale(1.08);
+  }
+}
+
+@keyframes celestial-pulse-evening {
+  0%, 100% {
+    box-shadow: 0 0 18px rgba(234, 88, 12, 0.45), 0 0 36px rgba(244, 63, 94, 0.25);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 26px rgba(234, 88, 12, 0.65), 0 0 48px rgba(244, 63, 94, 0.4);
+    transform: scale(1.05);
+  }
+}
+
+@keyframes celestial-pulse-night {
+  0%, 100% {
+    box-shadow: 0 0 16px rgba(199, 210, 254, 0.4), 0 0 32px rgba(165, 180, 252, 0.2);
+    transform: translateY(0px) scale(1);
+  }
+  50% {
+    box-shadow: 0 0 24px rgba(199, 210, 254, 0.6), 0 0 44px rgba(165, 180, 252, 0.35);
+    transform: translateY(-2px) scale(1.04);
+  }
+}
+
+@keyframes star-twinkle {
+  0%, 100% {
+    opacity: 0.25;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.2);
+  }
+}
+
+@keyframes pulse-dot {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.35;
+    transform: scale(0.8);
+  }
+}
+
+.greeting-banner {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 24px 28px;
+  margin-bottom: 24px;
+  border-radius: 24px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+  transition: background 0.6s ease, border-color 0.6s ease;
+}
+
+.celestial-ambient-backdrop {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.85;
+  transition: all 0.8s ease;
+  z-index: 0;
+}
+
+/* Morning Dawn (5:00 AM - 11:59 AM) */
+.greeting-banner.period-morning {
+  border-color: rgba(251, 191, 36, 0.28);
+}
+.greeting-banner.period-morning .celestial-ambient-backdrop {
+  background: radial-gradient(circle at 18% 30%, rgba(254, 240, 138, 0.35) 0%, rgba(253, 230, 138, 0.15) 35%, transparent 70%),
+              linear-gradient(115deg, rgba(254, 243, 199, 0.35) 0%, rgba(254, 215, 170, 0.18) 50%, var(--surface) 100%);
+}
+
+/* Afternoon Zenith (12:00 PM - 4:59 PM) */
+.greeting-banner.period-afternoon {
+  border-color: rgba(56, 189, 248, 0.28);
+}
+.greeting-banner.period-afternoon .celestial-ambient-backdrop {
+  background: radial-gradient(circle at 50% 15%, rgba(254, 240, 138, 0.4) 0%, rgba(186, 230, 253, 0.2) 40%, transparent 75%),
+              linear-gradient(115deg, rgba(224, 242, 254, 0.32) 0%, rgba(254, 243, 199, 0.22) 50%, var(--surface) 100%);
+}
+
+/* Evening Dusk (5:00 PM - 8:59 PM) */
+.greeting-banner.period-evening {
+  border-color: rgba(249, 115, 22, 0.28);
+}
+.greeting-banner.period-evening .celestial-ambient-backdrop {
+  background: radial-gradient(circle at 75% 35%, rgba(251, 146, 60, 0.35) 0%, rgba(251, 113, 133, 0.18) 40%, transparent 70%),
+              linear-gradient(115deg, rgba(255, 237, 213, 0.4) 0%, rgba(254, 205, 211, 0.22) 50%, var(--surface) 100%);
+}
+
+/* Night Sky (9:00 PM - 4:59 AM) */
+.greeting-banner.period-night {
+  border-color: rgba(129, 140, 248, 0.24);
+}
+.greeting-banner.period-night .celestial-ambient-backdrop {
+  background: radial-gradient(circle at 80% 25%, rgba(199, 210, 254, 0.25) 0%, rgba(99, 102, 241, 0.12) 45%, transparent 70%),
+              linear-gradient(115deg, rgba(238, 242, 255, 0.3) 0%, rgba(224, 231, 255, 0.15) 50%, var(--surface) 100%);
+}
+
+/* Dark Theme overrides */
+[data-theme="dark"] .greeting-banner.period-morning .celestial-ambient-backdrop {
+  background: radial-gradient(circle at 18% 30%, rgba(180, 83, 9, 0.3) 0%, rgba(120, 53, 15, 0.15) 45%, transparent 70%),
+              linear-gradient(115deg, rgba(69, 26, 3, 0.2) 0%, var(--surface) 100%);
+}
+[data-theme="dark"] .greeting-banner.period-afternoon .celestial-ambient-backdrop {
+  background: radial-gradient(circle at 50% 15%, rgba(14, 116, 144, 0.3) 0%, rgba(2, 132, 199, 0.15) 45%, transparent 70%),
+              linear-gradient(115deg, rgba(8, 47, 73, 0.2) 0%, var(--surface) 100%);
+}
+[data-theme="dark"] .greeting-banner.period-evening .celestial-ambient-backdrop {
+  background: radial-gradient(circle at 75% 35%, rgba(159, 18, 57, 0.35) 0%, rgba(194, 65, 12, 0.2) 45%, transparent 70%),
+              linear-gradient(115deg, rgba(76, 5, 25, 0.25) 0%, var(--surface) 100%);
+}
+[data-theme="dark"] .greeting-banner.period-night .celestial-ambient-backdrop {
+  background: radial-gradient(circle at 80% 25%, rgba(67, 56, 202, 0.35) 0%, rgba(30, 27, 75, 0.25) 50%, transparent 70%),
+              linear-gradient(115deg, rgba(15, 23, 42, 0.6) 0%, var(--surface) 100%);
+}
+
+/* Banner Content */
+.greeting-main-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 580px;
+}
+
+.greeting-eyebrow-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+
+.greeting-divider-bullet {
+  color: var(--line-strong);
+  font-weight: 700;
+  font-size: 11px;
+}
+
+.ist-live-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  border-radius: 99px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink-2);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.ist-live-pill:hover {
+  background: var(--surface-muted);
+  border-color: var(--line-strong);
+  transform: translateY(-1px);
+}
+
+.ist-live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  animation: pulse-dot 2s ease infinite;
+}
+.ist-live-dot.dot-morning { background: #f59e0b; }
+.ist-live-dot.dot-afternoon { background: #0ea5e9; }
+.ist-live-dot.dot-evening { background: #f97316; }
+.ist-live-dot.dot-night { background: #818cf8; }
+
+.preview-indicator {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font-size: 8px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.greeting-title {
+  margin: 4px 0 2px;
+  font-size: clamp(26px, 3.2vw, 34px);
+  line-height: 1.15;
+  letter-spacing: -0.04em;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.greeting-name {
+  color: var(--accent-ink);
+}
+
+.greeting-subtitle {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: 13px;
+  line-height: 1.5;
+  max-width: 480px;
+}
+
+.preview-reset-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.preview-reset-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink-2);
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.preview-reset-btn:hover {
+  background: var(--surface-muted);
+  color: var(--ink);
+}
+
+/* Greeting Aside / Celestial Sky Stage */
+.greeting-aside {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.celestial-sky-stage {
+  position: relative;
+  width: 220px;
+  height: 84px;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.04);
+  overflow: hidden;
+  cursor: pointer;
+  user-select: none;
+  transition: transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+}
+.celestial-sky-stage:hover {
+  transform: translateY(-2px);
+  border-color: var(--line-strong);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.06);
+}
+
+.celestial-orbit-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.celestial-orbit-track {
+  color: var(--line-strong);
+  opacity: 0.45;
+}
+
+.celestial-horizon-markers {
+  position: absolute;
+  bottom: 5px;
+  left: 12px;
+  right: 12px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+/* Night Stars */
+.celestial-night-stars {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.celestial-star {
+  position: absolute;
+  color: #c7d2fe;
+  font-size: 10px;
+  line-height: 1;
+  animation: star-twinkle 2.4s ease-in-out infinite;
+}
+.star-1 { top: 18%; left: 24%; animation-delay: 0s; font-size: 11px; }
+.star-2 { top: 32%; left: 44%; animation-delay: 0.8s; font-size: 9px; }
+.star-3 { top: 14%; left: 60%; animation-delay: 1.4s; font-size: 10px; }
+.star-4 { top: 44%; left: 70%; animation-delay: 0.4s; font-size: 12px; }
+.star-5 { top: 22%; left: 90%; animation-delay: 1.9s; font-size: 8px; }
+
+/* The Animated Celestial Body */
+.celestial-body {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  transform: translate(-50%, -50%);
+  transition: left 1.2s cubic-bezier(0.34, 1.56, 0.64, 1),
+              top 1.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  z-index: 2;
+  pointer-events: none;
+}
+
+.celestial-halo {
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  pointer-events: none;
+  transition: all 0.5s ease;
+}
+
+.halo-morning {
+  background: radial-gradient(circle, rgba(251, 191, 36, 0.45) 0%, rgba(245, 158, 11, 0.15) 60%, transparent 80%);
+  animation: celestial-pulse-morning 3s ease-in-out infinite;
+}
+.halo-afternoon {
+  background: radial-gradient(circle, rgba(245, 158, 11, 0.5) 0%, rgba(251, 191, 36, 0.2) 65%, transparent 85%);
+  animation: celestial-pulse-noon 2.8s ease-in-out infinite;
+}
+.halo-evening {
+  background: radial-gradient(circle, rgba(234, 88, 12, 0.5) 0%, rgba(244, 63, 94, 0.2) 65%, transparent 80%);
+  animation: celestial-pulse-evening 3.2s ease-in-out infinite;
+}
+.halo-night {
+  background: radial-gradient(circle, rgba(199, 210, 254, 0.45) 0%, rgba(129, 140, 248, 0.18) 60%, transparent 80%);
+  animation: celestial-pulse-night 3.6s ease-in-out infinite;
+}
+
+.celestial-core {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transition: all 0.4s ease;
+}
+
+.core-morning {
+  background: #fef3c7;
+  border: 1px solid #fde68a;
+  box-shadow: 0 0 14px rgba(245, 158, 11, 0.4);
+}
+.core-afternoon {
+  background: #fffbeb;
+  border: 1px solid #fef08a;
+  box-shadow: 0 0 18px rgba(245, 158, 11, 0.5);
+}
+.core-evening {
+  background: #ffedd5;
+  border: 1px solid #fed7aa;
+  box-shadow: 0 0 16px rgba(234, 88, 12, 0.45);
+}
+.core-night {
+  background: #1e1b4b;
+  border: 1px solid #312e81;
+  box-shadow: 0 0 14px rgba(129, 140, 248, 0.4);
+}
+
+.celestial-stage-caption {
+  position: absolute;
+  top: 6px;
+  left: 10px;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  text-transform: uppercase;
+  pointer-events: none;
+}
+
+@media (max-width: 660px) {
+  .greeting-banner {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 20px 18px;
+    gap: 18px;
+  }
+  .greeting-aside {
+    width: 100%;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .celestial-sky-stage {
+    width: 180px;
+    height: 72px;
+  }
+}

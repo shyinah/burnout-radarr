@@ -23,6 +23,7 @@ import type { AppPage, ProjectItem, SavedSession, StudyTask, WorkLogItem } from 
 import { ActivityChart, SubjectChart } from './DashboardCharts'
 import type { ActivityPoint, SlicePoint } from './Charts'
 import { useActivityTracker } from '../hooks/useActivityTracker';
+import { GreetingBanner } from './GreetingBanner';
 
 interface DashboardProps {
   view: 'overview' | 'student' | 'developer'
@@ -340,14 +341,7 @@ export function Dashboard(props: DashboardProps) {
   if (view === 'overview') {
     return (
       <div className="dashboard-page overview-page">
-        <div className="page-title-row">
-          <div>
-            <span className="eyebrow">{mode === 'student' ? 'YOUR STUDENT RADARR' : 'YOUR DEVELOPER RADARR'}</span>
-            <h1>A little more in tune.</h1>
-            <p>Notice your rhythm, then make space for what you need.</p>
-          </div>
-          <span className="demo-tag"><span className="demo-dot" /> {mode === 'student' ? 'STUDENT MODE' : 'DEVELOPER MODE'}</span>
-        </div>
+        <GreetingBanner name={name} mode={mode} />
         <section className="overview-hero">
           <div>
             <span className="hero-kicker"><Sparkles size={13} /> YOUR WEEK, AT A GLANCE</span>
