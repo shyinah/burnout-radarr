@@ -91,7 +91,7 @@ export function AuthDialog({ onClose, onSuccess }: AuthDialogProps) {
         style={{ maxWidth: '440px' }}
       >
         <div className="dialog-topline">
-          <span className="dialog-mode-icon">
+          <span className="dialog-icon">
             <Cloud size={17} />
           </span>
           <span className="eyebrow">SUPABASE CLOUD AUTH</span>
@@ -223,7 +223,7 @@ export function AuthDialog({ onClose, onSuccess }: AuthDialogProps) {
           <button
             type="submit"
             disabled={isLoading}
-            className="button-primary student-primary"
+            className="button-primary"
             style={{ width: '100%', minHeight: '39px', marginTop: '6px' }}
           >
             {isLoading ? 'Please wait…' : mode === 'signin' ? 'Sign in' : 'Create account'}

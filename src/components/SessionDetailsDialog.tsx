@@ -1,8 +1,8 @@
-import { BookOpen, Check, Code2, X } from 'lucide-react'
+import { Activity, Check, X } from 'lucide-react'
 import type { SavedSession } from '../services/app-state'
+import { isUnifiedCfiExplanation } from '../services/cfi-display.ts'
 
 export function SessionDetailsDialog({ session, onClose }: { session: SavedSession; onClose: () => void }) {
-  const Icon = session.mode === 'student' ? BookOpen : Code2
   const risk = session.cfiRiskLevel
     ? session.cfiRiskLevel.charAt(0).toUpperCase() + session.cfiRiskLevel.slice(1)
     : session.cfiScore <= 33
@@ -12,22 +12,27 @@ export function SessionDetailsDialog({ session, onClose }: { session: SavedSessi
         : 'High'
 
   return <div className="dialog-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
-    <section className={`dialog-card session-details ${session.mode}-dialog`} role="dialog" aria-modal="true" aria-labelledby="session-detail-title">
-      <div className="dialog-topline"><span className="dialog-mode-icon"><Icon size={17} /></span><span className="eyebrow">{session.mode === 'student' ? 'STUDY SESSION' : 'DEVELOPER SESSION'}</span><button type="button" className="icon-button dialog-close" onClick={onClose} aria-label="Close session details"><X size={18} /></button></div>
+    <section className="dialog-card session-details" role="dialog" aria-modal="true" aria-labelledby="session-detail-title">
+      <div className="dialog-topline"><span className="dialog-icon"><Activity size={17} /></span><span className="eyebrow">FOCUS SESSION</span><button type="button" className="icon-button dialog-close" onClick={onClose} aria-label="Close session details"><X size={18} /></button></div>
       <h2 id="session-detail-title">{session.title}</h2>
       <p className="dialog-intro">{new Date(session.sessionDate).toLocaleString([], { dateStyle: 'full', timeStyle: 'short' })}</p>
       <div className="detail-stat-grid"><div><small>FOCUS TIME</small><strong>{session.focusMinutes} min</strong></div><div><small>BREAK PLAN</small><strong>{session.breakMinutes} min</strong></div><div><small>SESSION STATUS</small><strong>{session.completed ? 'Completed' : 'Ended early'}</strong></div><div><small>HOW IT FELT</small><strong>{session.feeling || 'Not recorded'}</strong></div></div>
-      <div className="detail-stat-grid detail-context"><div><small>{session.mode === 'student' ? 'SUBJECT' : 'PROJECT'}</small><strong>{session.subject || session.project || '—'}</strong></div><div><small>CATEGORY</small><strong>{session.category || '—'}</strong></div><div><small>SLEEP CHECK-IN</small><strong>{session.sleepHours} hours</strong></div><div><small>FATIGUE CHECK-IN</small><strong>{session.endFatigue !== undefined ? `${session.perceivedFatigue} → ${session.endFatigue}/10` : `${session.perceivedFatigue}/10`}</strong></div></div>
+      <div className="detail-stat-grid detail-context"><div><small>FOCUS AREA</small><strong>{session.subject || session.project || '—'}</strong></div><div><small>ACTIVITY TYPE</small><strong>{session.category || '—'}</strong></div><div><small>SLEEP CHECK-IN</small><strong>{session.checkInContextAvailable === false ? 'Not recorded' : `${session.sleepHours} hours`}</strong></div><div><small>FATIGUE CHECK-IN</small><strong>{session.checkInContextAvailable === false ? 'Not recorded' : session.endFatigue !== undefined ? `${session.perceivedFatigue} → ${session.endFatigue}/10` : `${session.perceivedFatigue}/10`}</strong></div></div>
       {session.goal && <div className="session-goal-note"><small>SESSION INTENTION</small><p>{session.goal}</p></div>}
       <div className="detail-cfi">
         <span className="eyebrow">CFI RECORD</span>
         {session.pendingCFI ? (
-          <p>Pending: CFI calculation could not be completed for this session.</p>
+          <>
+            <p>Pending: the unified CFI requires both a recent subjective check-in and an eligible individual wearable baseline. Missing values are not scored as zero.</p>
+            {session.cfiExplanation && session.cfiExplanation.length > 0 && <ul className="cfi-factors session-cfi-explanation">
+              {session.cfiExplanation.map((factor, index) => <li key={index}><span className="factor-check"><Check size={10} /></span><span>{factor}</span></li>)}
+            </ul>}
+          </>
         ) : (
           <>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px' }}>
               <p style={{ margin: 0 }}>
-                <strong>{session.cfiScore}/100</strong> · Experimental wellness estimate, not a diagnosis.
+                <strong>{session.cfiScore}/100</strong> · {isUnifiedCfiExplanation(session.cfiExplanation) ? 'Unified experimental indicator, not a clinical diagnosis.' : 'Previously recorded experimental score; historical values are not recalculated.'}
               </p>
               <span className={`risk-pill ${risk.toLowerCase()}`}>
                 <span className="risk-dot" />{risk} risk

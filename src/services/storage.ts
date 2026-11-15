@@ -1,7 +1,50 @@
-import { createDemoData, type AppData } from './app-state.ts'
+import { createDemoData, type AppData, type CheckInRecord, type DailyCheckIn } from './app-state.ts'
 
 const STORAGE_KEY = 'burnout-radarr-demo-v1'
 const GUEST_BACKUP_KEY = 'burnout-radarr-guest-backup-v1'
+
+type StoredAppData = Partial<Omit<AppData, 'checkIns' | 'legacyDailyCheckIns'>> & {
+  checkIns?: unknown
+  legacyDailyCheckIns?: unknown
+}
+
+function isCheckInRecord(value: unknown): value is CheckInRecord {
+  if (!value || typeof value !== 'object') return false
+  const record = value as Partial<CheckInRecord>
+  return typeof record.id === 'string' &&
+    (record.period === 'morning' || record.period === 'evening') &&
+    typeof record.date === 'string' &&
+    typeof record.recordedAt === 'string' &&
+    record.schemaVersion === 1 &&
+    !!record.answers && typeof record.answers === 'object' && !Array.isArray(record.answers)
+}
+
+function isLegacyDailyCheckIn(value: unknown): value is DailyCheckIn {
+  if (!value || typeof value !== 'object') return false
+  const record = value as Partial<DailyCheckIn>
+  return typeof record.id === 'string' && typeof record.recordedAt === 'string' &&
+    typeof record.sleepHours === 'number' && typeof record.fatigue === 'number' && typeof record.note === 'string'
+}
+
+function normalizeStoredData(parsed: StoredAppData): AppData {
+  const defaults = createDemoData()
+  const { checkIns: storedCheckIns, legacyDailyCheckIns: storedLegacyCheckIns, ...rest } = parsed
+  const checkInValues = Array.isArray(storedCheckIns) ? storedCheckIns : []
+  const checkIns = checkInValues.filter(isCheckInRecord)
+  const legacyDailyCheckIns = [
+    ...(Array.isArray(storedLegacyCheckIns) ? storedLegacyCheckIns.filter(isLegacyDailyCheckIn) : []),
+    ...checkInValues.filter(isLegacyDailyCheckIn),
+  ]
+
+  return {
+    ...defaults,
+    ...rest,
+    preferences: { ...defaults.preferences, ...rest.preferences },
+    workLogs: Array.isArray(rest.workLogs) ? rest.workLogs : [],
+    checkIns,
+    legacyDailyCheckIns,
+  }
+}
 
 export function loadAppData(): AppData {
   if (typeof window === 'undefined') return createDemoData()
@@ -9,16 +52,11 @@ export function loadAppData(): AppData {
   try {
     const value = window.localStorage.getItem(STORAGE_KEY)
     if (!value) return createDemoData()
-    const parsed = JSON.parse(value) as Partial<AppData>
+    const parsed = JSON.parse(value) as StoredAppData
     if (!Array.isArray(parsed.sessions) || !parsed.preferences || !Array.isArray(parsed.tasks) || !Array.isArray(parsed.projects)) {
       return createDemoData()
     }
-    return {
-      ...createDemoData(),
-      ...parsed,
-      preferences: { ...createDemoData().preferences, ...parsed.preferences },
-      workLogs: Array.isArray(parsed.workLogs) ? parsed.workLogs : [],
-    }
+    return normalizeStoredData(parsed)
   } catch {
     return createDemoData()
   }
@@ -50,14 +88,9 @@ export function restoreGuestData(): AppData {
   try {
     const backup = window.localStorage.getItem(GUEST_BACKUP_KEY)
     if (backup) {
-      const parsed = JSON.parse(backup) as Partial<AppData>
+      const parsed = JSON.parse(backup) as StoredAppData
       if (Array.isArray(parsed.sessions) && parsed.preferences) {
-        return {
-          ...createDemoData(),
-          ...parsed,
-          preferences: { ...createDemoData().preferences, ...parsed.preferences },
-          workLogs: Array.isArray(parsed.workLogs) ? parsed.workLogs : [],
-        }
+        return normalizeStoredData(parsed)
       }
     }
   } catch {

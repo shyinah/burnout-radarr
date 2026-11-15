@@ -1,13 +1,15 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
-import { Activity, BookOpen, ChevronDown, Code2, Moon, MoreHorizontal, Sun } from 'lucide-react'
+import { Activity, ArrowRight, ChevronDown, Moon, MoreHorizontal, Sun } from 'lucide-react'
 import { Dashboard } from './components/Dashboard'
+import { CheckInPage } from './components/CheckInPage'
+import { WearableDataPage } from './components/WearableDataPage'
 import { EntryDialog, type EntryKind, type EntryRecord, type EntryValues } from './components/EntryDialog'
 const HistoryPage = lazy(() => import('./components/InsightsPages').then((module) => ({ default: module.HistoryPage })))
 const InsightsPage = lazy(() => import('./components/InsightsPages').then((module) => ({ default: module.InsightsPage })))
-const RecommendationsPage = lazy(() => import('./components/InsightsPages').then((module) => ({ default: module.RecommendationsPage })))
 const SettingsPage = lazy(() => import('./components/InsightsPages').then((module) => ({ default: module.SettingsPage })))
 import { SessionSetupDialog, FocusTimerDialog, type TimerState } from './components/SessionDialogs'
 import { SessionDetailsDialog } from './components/SessionDetailsDialog'
+import { BrowserActivityPanel } from './components/Dashboard'
 import { Sidebar } from './components/Sidebar'
 import { AuthView } from './components/AuthView'
 import {
@@ -15,56 +17,60 @@ import {
   type AppData,
   type AppPage,
   type AppPreferences,
+  type FocusSessionDraft,
   type ProjectItem,
   type SavedSession,
   type SessionDraft,
   type StudyTask,
   type WorkLogItem,
 } from './services/app-state'
-import { evaluateWithCFI } from './services/cfi'
-import { loadAppData, resetAppData, saveAppData, backupGuestData } from './services/storage'
+import { loadAppData, resetAppData, saveAppData, backupGuestData, restoreGuestData } from './services/storage'
 import { supabase } from './services/supabase'
+import { persistOptInActivitySession, preserveOptInActivitySessionLocally } from './services/browser-activity.ts'
+import { fetchCheckInsForCurrentUser } from './services/check-ins.ts'
+import { fetchWearableReadingsForCurrentUser } from './services/wearable-data.ts'
+import { fetchBrowserActivitySessionsForCurrentUser } from './services/browser-activity.ts'
+import { calculateUnifiedCFI, type UnifiedCFIResult } from './services/unified-cfi.ts'
 import {
   fetchCloudSessions,
   fetchUserProfile,
   getAuthenticatedUser,
   saveSessionToCloud,
 } from './services/cloud-sessions'
-import type { SessionInput, UserMode } from './types'
+import type { SessionInput } from './types'
 import type { User } from '@supabase/supabase-js'
+import { useActivityTracker } from './hooks/useActivityTracker'
 import './App.css'
 
 const pageTitles: Record<AppPage, string> = {
-  overview: 'Dashboard',
-  student: 'Study Space',
-  developer: 'Developer Command',
-  sessions: 'Focus sessions',
-  insights: 'Insights',
-  recommendations: 'Recovery notes',
+  overview: 'Overview',
+  'check-in': 'Check-ins',
+  wearable: 'Wearable Data',
+  activity: 'Activity',
+  insights: 'Analysis & Insights',
   settings: 'Settings',
 }
 
 const createId = () => crypto.randomUUID()
 
-function createEmptyUserData(name: string, defaultMode: UserMode = 'student'): AppData {
-  return {
-    preferences: {
-      ...DEFAULT_PREFERENCES,
-      name,
-      defaultMode,
-    },
-    sessions: [],
-    tasks: [],
-    projects: [],
-    workLogs: [],
-  }
+function ActivityPage({ sessions, tracker, userId, onOpenSession, onStart, defaultFocusMinutes, defaultBreakMinutes }: { sessions: SavedSession[]; tracker: ReturnType<typeof useActivityTracker>; userId: string; onOpenSession: (session: SavedSession) => void; onStart: () => void; defaultFocusMinutes: number; defaultBreakMinutes: number }) {
+  return <div className="content-page">
+    <div className="page-title-row"><div><span className="eyebrow">YOUR JOURNAL</span><h1>Activity</h1><p>Opt-in browser counts, one focus timer, and your saved session history.</p></div></div>
+    <section className="panel activity-focus-timer-panel">
+      <div><span className="eyebrow">UNIFIED FOCUS TIMER</span><h2>One timer for every focus session.</h2><p>Start, pause, resume, or end a focus block. Separate check-ins are not part of this timer.</p><span className="activity-focus-defaults">Default: {defaultFocusMinutes} min focus · {defaultBreakMinutes} min break</span></div>
+      <button type="button" className="button-primary" onClick={onStart}>Start focus session <ArrowRight size={15} /></button>
+    </section>
+    <BrowserActivityPanel key={userId} tracker={tracker} userId={userId} />
+    <HistoryPage sessions={sessions} onOpenSession={onOpenSession} />
+  </div>
 }
 
 function App() {
   const [data, setData] = useState<AppData>(() => loadAppData())
+  const browserActivity = useActivityTracker()
+  const { isTracking: isActivityTracking, stop: stopActivityTracking } = browserActivity
   const [page, setPage] = useState<AppPage>('overview')
-  const [activeMode, setActiveMode] = useState<UserMode>(data.preferences.defaultMode)
-  const [setupMode, setSetupMode] = useState<UserMode | null>(null)
+  const [setupOpen, setSetupOpen] = useState(false)
   const [timer, setTimer] = useState<TimerState | null>(null)
   const [entry, setEntry] = useState<{ kind: EntryKind; item?: EntryRecord } | null>(null)
   const [selectedSession, setSelectedSession] = useState<SavedSession | null>(null)
@@ -74,6 +80,7 @@ function App() {
   const [toast, setToast] = useState('')
   const [isSaving, setIsSaving] = useState(false)
   const [currentUser, setCurrentUser] = useState<User | null>(null)
+  const activityOwnerUserIdRef = useRef<string | null>(null)
   const [authLoading, setAuthLoading] = useState(true)
   const [isPasswordRecovery, setIsPasswordRecovery] = useState(false)
 
@@ -87,7 +94,6 @@ function App() {
         user.email?.split('@')[0] ||
         'Friend'
 
-      const userDefaultMode = profile?.defaultMode || (user.user_metadata?.default_mode as UserMode) || 'student'
       const { sessions: cloudSessions, error } = await fetchCloudSessions(user.id)
 
       if (error) {
@@ -98,14 +104,19 @@ function App() {
 
       setData((current) => ({
         ...current,
-        sessions: cloudSessions,
+        sessions: (() => {
+          const accountLocal = current.sessions.filter((session) => session.localOnly && session.userId === user.id)
+          const localById = new Map(accountLocal.map((session) => [session.id, session]))
+          const cloudIds = new Set(cloudSessions.map((session) => session.id))
+          const refreshedCloud = cloudSessions.map((session) => localById.get(session.id) ?? session)
+          const localOnly = accountLocal.filter((session) => !cloudIds.has(session.id))
+          return [...localOnly, ...refreshedCloud].sort((a, b) => b.sessionDate.localeCompare(a.sessionDate))
+        })(),
         preferences: {
           ...current.preferences,
           name: userDisplayName,
-          defaultMode: userDefaultMode,
         },
       }))
-      setActiveMode(userDefaultMode)
     } catch (err) {
       console.error('Error syncing from cloud:', err)
     }
@@ -139,9 +150,14 @@ function App() {
         setToast(`Signed in. Cloud sessions loaded for ${name}.`)
       } else if (event === 'SIGNED_OUT') {
         setIsPasswordRecovery(false)
-        const blank = createEmptyUserData('Friend', 'student')
-        setData(blank)
-        setActiveMode('student')
+        const guestData = restoreGuestData()
+        setData((current) => ({
+          ...guestData,
+          sessions: [
+            ...current.sessions.filter((session) => session.localOnly),
+            ...guestData.sessions.filter((session) => !current.sessions.some((item) => item.id === session.id)),
+          ],
+        }))
         setPage('overview')
         setToast('Signed out successfully.')
       }
@@ -158,6 +174,16 @@ function App() {
       backupGuestData(data)
     }
   }, [data, currentUser])
+
+  useEffect(() => {
+    const nextUserId = currentUser?.id ?? null
+    const previousUserId = activityOwnerUserIdRef.current
+    if (previousUserId !== null && previousUserId !== nextUserId && isActivityTracking) {
+      const finalMetrics = stopActivityTracking()
+      if (finalMetrics) preserveOptInActivitySessionLocally(finalMetrics)
+    }
+    activityOwnerUserIdRef.current = nextUserId
+  }, [currentUser?.id, isActivityTracking, stopActivityTracking])
 
   useEffect(() => {
     if (!toast) return
@@ -196,25 +222,8 @@ function App() {
     return () => window.clearInterval(interval)
   }, [timer?.status, timer?.phase, data.preferences.breakReminders, data.preferences.notifications, reminderSnoozeAt])
 
-  function handleModeChange(nextMode: UserMode) {
-    if (nextMode === activeMode) return
-    setActiveMode(nextMode)
-    setData((current) => ({
-      ...current,
-      preferences: {
-        ...current.preferences,
-        defaultMode: nextMode,
-      },
-    }))
-  }
-
   function navigate(nextPage: AppPage) {
-    if (nextPage === 'student' || nextPage === 'developer') {
-      handleModeChange(nextPage)
-      setPage('overview')
-    } else {
-      setPage(nextPage)
-    }
+    setPage(nextPage)
     setProfileOpen(false)
   }
 
@@ -226,7 +235,7 @@ function App() {
     setData((current) => {
       if (entry?.kind === 'task') {
         const existingTask = values.id ? current.tasks.find((item) => item.id === values.id) : undefined
-        const task: StudyTask = { id: values.id ?? createId(), title: values.title ?? '', subject: values.subject ?? 'Other', minutes: values.minutes ?? 25, completed: values.completed ?? existingTask?.completed ?? false }
+        const task: StudyTask = { id: values.id ?? createId(), title: values.title ?? '', subject: values.subject || 'Personal', minutes: values.minutes ?? 25, completed: values.completed ?? existingTask?.completed ?? false }
         return { ...current, tasks: values.id ? current.tasks.map((item) => item.id === values.id ? task : item) : [task, ...current.tasks] }
       }
       if (entry?.kind === 'project') {
@@ -234,7 +243,7 @@ function App() {
         return { ...current, projects: values.id ? current.projects.map((item) => item.id === values.id ? project : item) : [project, ...current.projects] }
       }
       if (entry?.kind === 'worklog') {
-        const log: WorkLogItem = { id: values.id ?? createId(), project: values.project ?? '', category: values.category ?? 'Coding', description: values.description ?? '', date: values.date ?? new Date().toISOString() }
+        const log: WorkLogItem = { id: values.id ?? createId(), project: values.project ?? '', category: values.category ?? 'Work', description: values.description ?? '', date: values.date ?? new Date().toISOString() }
         return { ...current, workLogs: values.id ? current.workLogs.map((item) => item.id === values.id ? log : item) : [log, ...current.workLogs] }
       }
       return current
@@ -271,11 +280,17 @@ function App() {
     setToast('Work log entry deleted.')
   }
 
-  function startSession(draft: SessionDraft) {
+  function startSession(draft: FocusSessionDraft) {
     const seconds = draft.focusMinutes * 60
+    const latestCheckIn = [...data.legacyDailyCheckIns].sort((a, b) => b.recordedAt.localeCompare(a.recordedAt))[0]
+    const timerDraft: SessionDraft = {
+      ...draft,
+      sleepHours: latestCheckIn?.sleepHours ?? 0,
+      perceivedFatigue: latestCheckIn?.fatigue ?? 1,
+    }
     focusElapsedRef.current = 0
-    setTimer({ draft, status: 'running', phase: 'focus', secondsLeft: seconds, focusSecondsLeft: seconds, elapsedFocusSeconds: 0, elapsedBreakSeconds: 0, completed: false })
-    setSetupMode(null)
+    setTimer({ draft: timerDraft, status: 'running', phase: 'focus', secondsLeft: seconds, focusSecondsLeft: seconds, elapsedFocusSeconds: 0, elapsedBreakSeconds: 0, completed: false })
+    setSetupOpen(false)
     setBreakReminder(false)
     setReminderSnoozeAt(null)
   }
@@ -307,10 +322,20 @@ function App() {
   async function handleLogout() {
     setProfileOpen(false)
     try {
+      if (browserActivity.isTracking) {
+        const finalMetrics = browserActivity.stop()
+        if (finalMetrics) await persistOptInActivitySession(finalMetrics)
+      }
       await supabase.auth.signOut()
       setCurrentUser(null)
-      setData(createEmptyUserData('Friend', 'student'))
-      setActiveMode('student')
+      const guestData = restoreGuestData()
+      setData((current) => ({
+        ...guestData,
+        sessions: [
+          ...current.sessions.filter((session) => session.localOnly),
+          ...guestData.sessions.filter((session) => !current.sessions.some((item) => item.id === session.id)),
+        ],
+      }))
       setPage('overview')
       setToast('Signed out successfully.')
     } catch (err) {
@@ -318,24 +343,51 @@ function App() {
     }
   }
 
-  async function saveSession(feeling: string, endFatigue?: number) {
+  async function saveSession() {
     if (!timer || isSaving) return
     setIsSaving(true)
     try {
-      const resolvedEndFatigue = endFatigue !== undefined ? endFatigue : timer.draft.perceivedFatigue
+      const latestCheckIn = [...data.legacyDailyCheckIns].sort((a, b) => b.recordedAt.localeCompare(a.recordedAt))[0]
+      const hasCheckInContext = Boolean(latestCheckIn)
+      const sessionDate = new Date().toISOString()
 
       const input: SessionInput = {
-        mode: timer.draft.mode,
+        // Keep the existing required CFI/database classification; the unified UI no longer selects a mode.
+        mode: timer.draft.mode ?? 'student',
         focusMinutes: Math.max(1, Math.round(timer.elapsedFocusSeconds / 60)),
         breakMinutes: timer.draft.breakMinutes,
-        sleepHours: timer.draft.sleepHours,
-        perceivedFatigue: resolvedEndFatigue,
-        sessionDate: new Date().toISOString(),
+        // The database schema requires these fields. Compatibility sentinels are hidden and
+        // are retained for legacy database compatibility; unified CFI does not score these fields.
+        sleepHours: latestCheckIn?.sleepHours ?? 0,
+        perceivedFatigue: latestCheckIn?.fatigue ?? 1,
+        sessionDate,
       }
-      const cfiResult = await evaluateWithCFI(input)
 
       const authUser = await getAuthenticatedUser()
       const effectiveUserId = authUser ? authUser.id : (currentUser?.id || 'local-user')
+      let cfiResult: UnifiedCFIResult | null = null
+      let cfiExplanation: string[] | undefined
+
+      if (authUser) {
+        const [checkInResult, wearableResult, activityResult] = await Promise.all([
+          fetchCheckInsForCurrentUser(),
+          fetchWearableReadingsForCurrentUser(),
+          fetchBrowserActivitySessionsForCurrentUser(),
+        ])
+        cfiResult = calculateUnifiedCFI({
+          userId: authUser.id,
+          evaluatedAt: sessionDate,
+          checkIns: (checkInResult.data ?? []).filter((record) => record.userId === authUser.id),
+          wearableReadings: (wearableResult.data ?? []).filter((reading) => reading.userId === authUser.id),
+          browserActivitySessions: (activityResult.data ?? []).filter((activity) => activity.userId === authUser.id),
+        })
+        cfiExplanation = [...cfiResult.explanation]
+        if (checkInResult.error) cfiExplanation.push(`Check-in source unavailable during calculation: ${checkInResult.error}`)
+        if (wearableResult.error) cfiExplanation.push(`Individual wearable source unavailable during calculation: ${wearableResult.error}`)
+        if (activityResult.error) cfiExplanation.push(`Browser activity context unavailable; it does not affect the score: ${activityResult.error}`)
+      } else {
+        cfiExplanation = ['Unified CFI pending: authenticated individual check-ins and wearable records are required. Guest data is not associated with an account.']
+      }
 
       const session: SavedSession = {
         ...input,
@@ -348,26 +400,32 @@ function App() {
         description: timer.draft.description,
         goal: timer.draft.goal,
         completed: timer.completed,
-        pendingCFI: !cfiResult,
-        cfiScore: cfiResult ? cfiResult.score : -1,
-        cfiRiskLevel: cfiResult?.riskLevel,
-        cfiExplanation: cfiResult?.explanation,
-        cfiRecommendations: cfiResult?.recommendations,
-        feeling,
-        endFatigue: resolvedEndFatigue,
+        pendingCFI: !cfiResult || cfiResult.score === null,
+        cfiScore: cfiResult?.score ?? -1,
+        cfiRiskLevel: cfiResult?.riskLevel ?? undefined,
+        cfiExplanation,
+        feeling: 'Not recorded',
+        checkInContextAvailable: hasCheckInContext,
+        localOnly: Boolean(authUser && (!cfiResult || cfiResult.score === null)),
       }
       setData((current) => ({ ...current, sessions: [session, ...current.sessions] }))
       setTimer(null)
       setBreakReminder(false)
 
-      if (authUser) {
+      if (authUser && cfiResult && cfiResult.score !== null) {
         const cloudResult = await saveSessionToCloud(session, authUser.id)
         if (cloudResult.success) {
           setToast(session.completed ? 'Session saved and synced to cloud.' : 'Session saved (ended early) and synced to cloud.')
         } else {
           console.warn('Cloud sync note:', cloudResult.error)
+          setData((current) => ({
+            ...current,
+            sessions: current.sessions.map((saved) => saved.id === session.id ? { ...saved, localOnly: true } : saved),
+          }))
           setToast(session.completed ? 'Session saved locally (cloud sync offline).' : 'Session saved locally (ended early).')
         }
+      } else if (authUser) {
+        setToast('Session saved on this device. Unified CFI is pending until a recent check-in and eligible individual wearable baseline are available.')
       } else {
         setToast(session.completed ? 'Session saved. Nice work showing up.' : 'Session saved as ended early.')
       }
@@ -377,9 +435,8 @@ function App() {
   }
 
   function resetSettings() {
-    if (!window.confirm('Restore the original mode, theme, and timer defaults? Your sessions will remain.')) return
+    if (!window.confirm('Restore the original theme and timer defaults? Your sessions will remain.')) return
     setData((current) => ({ ...current, preferences: { ...DEFAULT_PREFERENCES } }))
-    setActiveMode(DEFAULT_PREFERENCES.defaultMode)
     setToast('Settings restored.')
   }
 
@@ -387,7 +444,6 @@ function App() {
     if (!window.confirm('Reset this device’s demo journal? This replaces your local sessions, tasks, projects, work logs, and preferences with the sample set.')) return
     const restored = resetAppData()
     setData(restored)
-    setActiveMode(restored.preferences.defaultMode)
     setPage('overview')
     setToast('Demo journal reset on this device.')
   }
@@ -409,6 +465,7 @@ function App() {
       <AuthView
         initialMode={isPasswordRecovery ? 'recovery' : 'signin'}
         onSuccess={(user) => {
+          backupGuestData(data)
           setIsPasswordRecovery(false)
           setCurrentUser(user)
           syncFromCloud(user)
@@ -417,42 +474,15 @@ function App() {
     )
   }
 
-  const currentMode: UserMode = activeMode
-  const pageTitle = page === 'overview'
-    ? (currentMode === 'student' ? 'Study Space' : 'Developer Command')
-    : pageTitles[page]
+  const pageTitle = pageTitles[page]
 
   return (
-    <div className="app-shell" data-mode={currentMode} data-theme={data.preferences.theme}>
-      <Sidebar activePage={page} onNavigate={navigate} mode={currentMode} />
+    <div className="app-shell" data-theme={data.preferences.theme}>
+      <Sidebar activePage={page} onNavigate={navigate} />
       <div className="main-column">
         <header className="topbar">
           <div className="breadcrumbs"><span>radarr</span><span className="breadcrumb-slash">/</span><strong>{pageTitle}</strong></div>
           <div className="topbar-actions">
-            <div className="topbar-mode-switch" role="group" aria-label="Choose mode">
-              <button
-                type="button"
-                className={`mode-switch-btn student-btn${currentMode === 'student' ? ' selected' : ''}`}
-                onClick={() => handleModeChange('student')}
-                aria-pressed={currentMode === 'student'}
-                title="Switch to Student / Study space"
-              >
-                <BookOpen size={13} strokeWidth={2.2} />
-                <span>Study</span>
-                <span className="mode-switch-dot student-dot" />
-              </button>
-              <button
-                type="button"
-                className={`mode-switch-btn dev-btn${currentMode === 'developer' ? ' selected' : ''}`}
-                onClick={() => handleModeChange('developer')}
-                aria-pressed={currentMode === 'developer'}
-                title="Switch to Developer command centre"
-              >
-                <Code2 size={13} strokeWidth={2.2} />
-                <span>Dev</span>
-                <span className="mode-switch-dot dev-dot" />
-              </button>
-            </div>
             <button type="button" className="icon-button topbar-icon" onClick={() => setData((current) => ({ ...current, preferences: { ...current.preferences, theme: current.preferences.theme === 'dark' ? 'light' : 'dark' } }))} aria-label={data.preferences.theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'} title="Toggle theme">{data.preferences.theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}</button>
             <div className="profile-menu-wrap">
               <button type="button" className={`profile-trigger${profileOpen ? ' is-open' : ''}`} onClick={() => setProfileOpen((open) => !open)} aria-expanded={profileOpen} aria-haspopup="menu">
@@ -471,7 +501,7 @@ function App() {
                     </span>
                   </div>
                   <button type="button" role="menuitem" onClick={() => navigate('settings')}>Profile &amp; settings</button>
-                  <button type="button" role="menuitem" onClick={() => { navigate('sessions'); setProfileOpen(false) }}>View session history</button>
+                  <button type="button" role="menuitem" onClick={() => { navigate('activity'); setProfileOpen(false) }}>View activity</button>
                   <button type="button" role="menuitem" onClick={handleLogout} style={{ color: '#d94343' }}>Sign out</button>
                 </div>
               )}
@@ -480,16 +510,15 @@ function App() {
         </header>
         <main className="app-main">
           <Suspense fallback={<div className="page-skeleton" role="status">Opening your workspace…</div>}>
-            {page === 'overview' || page === 'student' || page === 'developer' ? (
+            {page === 'overview' ? (
               <Dashboard
-                view={currentMode}
                 name={data.preferences.name || 'friend'}
                 sessions={data.sessions}
                 tasks={data.tasks}
                 projects={data.projects}
                 workLogs={data.workLogs}
                 onNavigate={navigate}
-                onStart={(mode) => setSetupMode(mode)}
+                onStart={() => setSetupOpen(true)}
                 onToggleTask={toggleTask}
                 onAddTask={() => openEntry('task')}
                 onEditTask={(task) => openEntry('task', task)}
@@ -502,12 +531,14 @@ function App() {
                 onEditWorkLog={(log) => openEntry('worklog', log)}
                 onDeleteWorkLog={deleteWorkLog}
               />
-            ) : page === 'sessions' ? (
-              <HistoryPage sessions={data.sessions} mode={currentMode} onOpenSession={setSelectedSession} />
+            ) : page === 'check-in' ? (
+              <CheckInPage key={currentUser.id} userId={currentUser.id} guestRecords={data.checkIns} />
+            ) : page === 'wearable' ? (
+              <WearableDataPage key={currentUser.id} userId={currentUser.id} />
+            ) : page === 'activity' ? (
+              <ActivityPage sessions={data.sessions} tracker={browserActivity} userId={currentUser.id} onOpenSession={setSelectedSession} onStart={() => setSetupOpen(true)} defaultFocusMinutes={data.preferences.focusMinutes} defaultBreakMinutes={data.preferences.breakMinutes} />
             ) : page === 'insights' ? (
-              <InsightsPage sessions={data.sessions} mode={currentMode} />
-            ) : page === 'recommendations' ? (
-              <RecommendationsPage sessions={data.sessions} mode={currentMode} onStart={(mode) => setSetupMode(mode || currentMode)} />
+              <InsightsPage sessions={data.sessions} onStart={() => setSetupOpen(true)} />
             ) : (
               <SettingsPage
                 preferences={data.preferences}
@@ -515,9 +546,6 @@ function App() {
                 user={currentUser}
                 onChange={(patch: Partial<AppPreferences>) => {
                   setData((current) => ({ ...current, preferences: { ...current.preferences, ...patch } }))
-                  if (patch.defaultMode) {
-                    setActiveMode(patch.defaultMode)
-                  }
                 }}
                 onResetSettings={resetSettings}
                 onResetData={resetData}
@@ -530,13 +558,12 @@ function App() {
         <footer className="app-disclaimer">CFI is an experimental wellness estimate, not a medical diagnosis.</footer>
       </div>
 
-      {setupMode && (
+      {setupOpen && (
         <SessionSetupDialog
-          mode={setupMode}
           defaultFocus={data.preferences.focusMinutes}
           defaultBreak={data.preferences.breakMinutes}
           projects={data.projects}
-          onClose={() => setSetupMode(null)}
+          onClose={() => setSetupOpen(false)}
           onStart={startSession}
         />
       )}

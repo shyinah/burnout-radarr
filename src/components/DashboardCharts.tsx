@@ -1,21 +1,20 @@
 import type { SlicePoint, ActivityPoint } from './Charts'
 
-const studentColors = ['#a78bfa', '#f4a6bd', '#f2b57a', '#8eb8a0', '#e6cc7c']
-const developerColors = ['#c6e77d', '#68c7bb', '#8fa7d8', '#718174', '#d4b86c']
+const chartColors = ['#a78bfa', '#f4a6bd', '#f2b57a', '#8eb8a0', '#e6cc7c']
 
-export function ActivityChart({ data, mode = 'student', compact = false }: { data: ActivityPoint[]; mode?: 'student' | 'developer'; compact?: boolean }) {
+export function ActivityChart({ data, compact = false }: { data: ActivityPoint[]; compact?: boolean }) {
   const maximum = Math.max(1, ...data.map((point) => point.minutes))
   return <div className={`simple-activity-chart${compact ? ' simple-activity-chart-compact' : ''}`} role="img" aria-label="Focused minutes by day over the past week">
     {data.map((point) => <div className="simple-chart-day" key={point.day}>
       <span className="simple-chart-value">{point.minutes || ''}</span>
-      <span className="simple-chart-track"><i className={mode} style={{ height: `${Math.max(point.minutes ? 10 : 3, point.minutes / maximum * 100)}%` }} /></span>
+      <span className="simple-chart-track"><i style={{ height: `${Math.max(point.minutes ? 10 : 3, point.minutes / maximum * 100)}%` }} /></span>
       <span className="simple-chart-label">{point.day}</span>
     </div>)}
   </div>
 }
 
-export function SubjectChart({ data, mode = 'student' }: { data: SlicePoint[]; mode?: 'student' | 'developer' }) {
-  const colors = mode === 'developer' ? developerColors : studentColors
+export function SubjectChart({ data }: { data: SlicePoint[] }) {
+  const colors = chartColors
   const rows = data.slice(0, 5)
   const total = data.reduce((sum, item) => sum + item.minutes, 0)
   const stops = rows.map((item, index) => {

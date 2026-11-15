@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { Activity, AlertCircle, ArrowLeft, ArrowRight, BookOpen, Check, Code2, Lock, Mail, User as UserIcon } from 'lucide-react'
+import { Activity, AlertCircle, ArrowLeft, ArrowRight, Check, ClipboardCheck, HeartPulse, Lock, Mail, User as UserIcon, Watch } from 'lucide-react'
 import { supabase } from '../services/supabase.ts'
 import type { User } from '@supabase/supabase-js'
 
@@ -16,7 +16,6 @@ export function AuthView({ initialMode = 'signin', onSuccess }: AuthViewProps) {
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [fullName, setFullName] = useState('')
-  const [startingMode, setStartingMode] = useState<'student' | 'developer'>('student')
   const [isLoading, setIsLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
   const [infoMsg, setInfoMsg] = useState('')
@@ -75,7 +74,6 @@ export function AuthView({ initialMode = 'signin', onSuccess }: AuthViewProps) {
             data: {
               full_name: trimmedName || undefined,
               name: trimmedName || undefined,
-              default_mode: startingMode,
             },
           },
         })
@@ -126,8 +124,23 @@ export function AuthView({ initialMode = 'signin', onSuccess }: AuthViewProps) {
   }
 
   return (
-    <div className="auth-page-container">
-      <div className="auth-card-wrapper">
+    <main className="auth-page-container">
+      <div className="auth-layout">
+        <section className="auth-editorial-panel" aria-label="Burnout Radarr introduction">
+          <div className="auth-editorial-topline"><span className="auth-editorial-mark"><Activity size={17} /></span><span>PERSONAL FIELD NOTES <i>·</i> NO. 01</span></div>
+          <div className="auth-editorial-copy">
+            <span className="eyebrow">NOTICE THE RHYTHM</span>
+            <h1>Your energy leaves clues.</h1>
+            <p>A private place to notice focus, recovery, and the small signals in between.</p>
+          </div>
+          <div className="auth-paper-note"><span>ONE THING TO REMEMBER</span><strong>Rest belongs in the story, too.</strong><small>Reflection, not a scorecard.</small></div>
+          <ul className="auth-editorial-index" aria-label="What you can keep track of">
+            <li><ClipboardCheck size={16} /><span>Daily check-ins</span></li>
+            <li><Watch size={16} /><span>Wearable summaries</span></li>
+            <li><HeartPulse size={16} /><span>Focus and recovery</span></li>
+          </ul>
+        </section>
+        <div className="auth-card-wrapper">
         <header className="auth-brand-header">
           <div className="brand-lockup">
             <span className="brand-mark">
@@ -149,7 +162,7 @@ export function AuthView({ initialMode = 'signin', onSuccess }: AuthViewProps) {
               {mode === 'recovery' && 'Set a new password'}
             </h2>
             <p>
-              {mode === 'signin' && 'Sign in to access your personal study space or developer command centre.'}
+              {mode === 'signin' && 'Sign in to access your personal wellness and activity space.'}
               {mode === 'signup' && 'Join Burnout Radarr to track cognitive fatigue and protect your focus rhythm.'}
               {mode === 'forgot' && 'Enter your registered email and we will send you a password recovery link.'}
               {mode === 'recovery' && 'Enter your new password below to secure your account.'}
@@ -274,36 +287,10 @@ export function AuthView({ initialMode = 'signin', onSuccess }: AuthViewProps) {
               </label>
             )}
 
-            {mode === 'signup' && (
-              <div className="signup-mode-picker">
-                <span className="field-label-text">Starting workspace mode</span>
-                <div className="mode-option-grid">
-                  <button
-                    type="button"
-                    className={`mode-option-card${startingMode === 'student' ? ' selected' : ''}`}
-                    onClick={() => setStartingMode('student')}
-                  >
-                    <BookOpen size={16} />
-                    <strong>Study space</strong>
-                    <small>Coursework, problem sets &amp; academic pacing</small>
-                  </button>
-                  <button
-                    type="button"
-                    className={`mode-option-card${startingMode === 'developer' ? ' selected' : ''}`}
-                    onClick={() => setStartingMode('developer')}
-                  >
-                    <Code2 size={16} />
-                    <strong>Dev command</strong>
-                    <small>Projects, debugging, architecture &amp; sprint rhythm</small>
-                  </button>
-                </div>
-              </div>
-            )}
-
             <button
               type="submit"
               disabled={isLoading}
-              className={`button-primary auth-submit-btn ${startingMode === 'developer' && mode === 'signup' ? 'developer-primary' : 'student-primary'}`}
+              className="button-primary auth-submit-btn"
             >
               {isLoading
                 ? 'Please wait…'
@@ -331,11 +318,12 @@ export function AuthView({ initialMode = 'signin', onSuccess }: AuthViewProps) {
           )}
 
           <footer className="auth-footer-notice">
-            <span>🔒 Isolated user sessions &amp; Row Level Security enabled.</span>
+            <span><Lock size={12} /> Isolated user sessions &amp; Row Level Security enabled.</span>
             <span>Your personal check-ins and CFI logs are private to your account.</span>
           </footer>
         </section>
+        </div>
       </div>
-    </div>
+    </main>
   )
 }

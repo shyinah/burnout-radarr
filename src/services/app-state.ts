@@ -1,6 +1,6 @@
 import type { Recommendation, SessionRecord, UserMode } from '../types/index.ts'
 
-export type AppPage = 'overview' | 'student' | 'developer' | 'sessions' | 'insights' | 'recommendations' | 'settings'
+export type AppPage = 'overview' | 'check-in' | 'wearable' | 'activity' | 'insights' | 'settings'
 export type AppTheme = 'light' | 'dark' | 'system'
 
 export interface SavedSession extends SessionRecord {
@@ -14,6 +14,10 @@ export interface SavedSession extends SessionRecord {
   pendingCFI: boolean
   feeling: string
   endFatigue?: number
+  /** False when legacy required storage fields contain compatibility sentinels, not check-in data. */
+  checkInContextAvailable?: boolean
+  /** Session was kept locally because the current database schema requires check-in values. */
+  localOnly?: boolean
   cfiRiskLevel?: 'low' | 'moderate' | 'high'
   cfiExplanation?: string[]
   cfiRecommendations?: Recommendation[]
@@ -43,6 +47,27 @@ export interface WorkLogItem {
   date: string
 }
 
+export interface DailyCheckIn {
+  id: string
+  recordedAt: string
+  sleepHours: number
+  fatigue: number
+  note: string
+}
+
+export type CheckInPeriod = 'morning' | 'evening'
+export type CheckInAnswerValue = string | number
+
+/** Versioned, period-specific answers shaped for local storage and future provider sync. */
+export interface CheckInRecord {
+  id: string
+  period: CheckInPeriod
+  date: string
+  recordedAt: string
+  schemaVersion: number
+  answers: Record<string, CheckInAnswerValue>
+}
+
 export interface AppPreferences {
   name: string
   defaultMode: UserMode
@@ -58,11 +83,13 @@ export interface AppData {
   tasks: StudyTask[]
   projects: ProjectItem[]
   workLogs: WorkLogItem[]
+  checkIns: CheckInRecord[]
+  /** Previous single-form check-ins are retained for existing CFI/session history compatibility. */
+  legacyDailyCheckIns: DailyCheckIn[]
   preferences: AppPreferences
 }
 
-export interface SessionDraft {
-  mode: UserMode
+export interface FocusSessionDraft {
   title: string
   subject: string
   project: string
@@ -71,6 +98,12 @@ export interface SessionDraft {
   goal: string
   focusMinutes: number
   breakMinutes: number
+}
+
+export interface SessionDraft extends FocusSessionDraft {
+  /** Legacy classification and check-in contract used by existing session helpers. */
+  mode?: UserMode
+  /** Legacy input contract; the unified timer fills these from the latest separate check-in. */
   sleepHours: number
   perceivedFatigue: number
 }
@@ -171,5 +204,7 @@ export function createDemoData(): AppData {
       { id: 'log-1', project: 'Orbit Notes', category: 'Coding', description: 'Refactored navigation state', date: dateAt(0, 11) },
       { id: 'log-2', project: 'Fieldnotes', category: 'Debugging', description: 'Traced sync edge case', date: dateAt(1, 15) },
     ],
+    checkIns: [],
+    legacyDailyCheckIns: [],
   }
 }

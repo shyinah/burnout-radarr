@@ -145,9 +145,33 @@ async function runTests() {
       feeling: 'Steady',
     }
 
+    const unifiedSession: SavedSession = {
+      ...realSession,
+      id: 'session-unified-refresh-test',
+      sessionDate: '2026-11-15T10:00:00.000Z',
+      cfiScore: 54,
+      cfiRiskLevel: 'moderate',
+      cfiExplanation: [
+        'Unified CFI: 54/100 (moderate descriptive band).',
+        'Subjective fatigue indicator: 60/100 from 2/2 responses.',
+        'rmssd individual reading (watch-alpha; ms): 37 ms; 14 baseline days.',
+        'Browser activity context only (0% scoring weight): 300 seconds.',
+      ],
+    }
+    const pendingUnifiedSession: SavedSession = {
+      ...unifiedSession,
+      id: 'session-unified-pending-refresh-test',
+      sessionDate: '2026-11-15T11:00:00.000Z',
+      pendingCFI: true,
+      cfiScore: -1,
+      cfiRiskLevel: undefined,
+      cfiExplanation: ['Unified CFI pending: wearable baseline unavailable.'],
+      localOnly: true,
+    }
+
     const updatedData: AppData = {
       ...demoData,
-      sessions: [realSession, ...demoData.sessions],
+      sessions: [pendingUnifiedSession, unifiedSession, realSession, ...demoData.sessions],
     }
 
     saveAppData(updatedData)
@@ -160,8 +184,15 @@ async function runTests() {
     assertEqual(retrieved.cfiRiskLevel, 'low', 'Retrieved riskLevel should match')
     assertEqual(JSON.stringify(retrieved.cfiExplanation), JSON.stringify(realSession.cfiExplanation))
     assertEqual(JSON.stringify(retrieved.cfiRecommendations), JSON.stringify(realSession.cfiRecommendations))
+    const restoredUnified = loaded.sessions.find((session) => session.id === unifiedSession.id)
+    assert(restoredUnified !== undefined, 'Unified result should be recovered after local refresh')
+    assertEqual(restoredUnified.cfiScore, 54, 'Unified score should remain unchanged after refresh')
+    assertEqual(JSON.stringify(restoredUnified.cfiExplanation), JSON.stringify(unifiedSession.cfiExplanation), 'Unified source breakdown should survive refresh')
+    const restoredPending = loaded.sessions.find((session) => session.id === pendingUnifiedSession.id)
+    assert(restoredPending?.pendingCFI, 'Pending unified session should remain pending after refresh')
+    assertEqual(restoredPending.cfiScore, -1, 'Pending score must not become zero after refresh')
     passed++
-    console.log('✓ PASS: Storage persists and recovers all rich CFI fields (score, riskLevel, explanation, recommendations)')
+    console.log('✓ PASS: Storage refresh preserves historical CFI, unified score/explanation, and pending state')
   }
 
   // Test 6: Failure sentinel handling (-1 score, pendingCFI: true)

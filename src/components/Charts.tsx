@@ -1,3 +1,4 @@
+import { useId } from 'react'
 import {
   Area,
   AreaChart,
@@ -27,21 +28,20 @@ export interface SlicePoint {
 
 interface ActivityChartProps {
   data: ActivityPoint[]
-  mode?: 'student' | 'developer'
   compact?: boolean
 }
 
 const chartMargin = { top: 10, right: 8, left: -22, bottom: 0 }
 
-export function ActivityChart({ data, mode = 'student', compact = false }: ActivityChartProps) {
-  const stroke = mode === 'developer' ? '#c6e77d' : '#a78bfa'
-  const fill = mode === 'developer' ? 'var(--chart-fill-dev)' : 'var(--chart-fill-student)'
+export function ActivityChart({ data, compact = false }: ActivityChartProps) {
+  const gradientId = `activity-fill-${useId().replaceAll(':', '')}`
+  const stroke = '#718064'
   return (
     <div className={`chart-wrap${compact ? ' chart-wrap-compact' : ''}`} role="img" aria-label="Focused minutes by day over the past week">
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={data} margin={chartMargin}>
           <defs>
-            <linearGradient id={`activity-fill-${mode}`} x1="0" y1="0" x2="0" y2="1">
+            <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor={stroke} stopOpacity={0.28} />
               <stop offset="100%" stopColor={stroke} stopOpacity={0.015} />
             </linearGradient>
@@ -54,17 +54,15 @@ export function ActivityChart({ data, mode = 'student', compact = false }: Activ
             contentStyle={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14, color: 'var(--ink)', boxShadow: 'var(--shadow-card)' }}
             formatter={(value) => [`${value ?? 0} min`, 'Focused']}
           />
-          <Area type="monotone" dataKey="minutes" stroke={stroke} strokeWidth={3} fill={fill} fillOpacity={1} activeDot={{ r: 5, strokeWidth: 0 }} />
+          <Area type="monotone" dataKey="minutes" stroke={stroke} strokeWidth={3} fill={`url(#${gradientId})`} fillOpacity={1} activeDot={{ r: 5, strokeWidth: 0 }} />
         </AreaChart>
       </ResponsiveContainer>
     </div>
   )
 }
 
-export function SubjectChart({ data, mode = 'student' }: { data: SlicePoint[]; mode?: 'student' | 'developer' }) {
-  const colors = mode === 'developer'
-    ? ['#c6e77d', '#68c7bb', '#8fa7d8', '#718174', '#d4b86c']
-    : ['#a78bfa', '#f4a6bd', '#f2b57a', '#8eb8a0', '#e6cc7c']
+export function SubjectChart({ data }: { data: SlicePoint[] }) {
+  const colors = ['#8f5146', '#718064', '#b08b4d', '#688294', '#9a7763']
   const rows = data.length ? data.slice(0, 5) : [{ name: 'No sessions yet', minutes: 1 }]
   return (
     <div className="subject-chart" role="img" aria-label="Time distribution by subject or project">
@@ -92,8 +90,8 @@ export function SubjectChart({ data, mode = 'student' }: { data: SlicePoint[]; m
   )
 }
 
-export function CompareBars({ data, mode = 'student' }: { data: ActivityPoint[]; mode?: 'student' | 'developer' }) {
-  const fill = mode === 'developer' ? '#c6e77d' : '#a78bfa'
+export function CompareBars({ data }: { data: ActivityPoint[] }) {
+  const fill = '#8f5146'
   return (
     <div className="chart-wrap compare-chart" role="img" aria-label="Weekly focus minutes bar chart">
       <ResponsiveContainer width="100%" height="100%">

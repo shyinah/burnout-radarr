@@ -1,204 +1,94 @@
-import { useEffect, useRef, useState, useCallback, useSyncExternalStore } from 'react'
-import type { ActivityMetrics, ActivityTrackerAPI } from '../types/activity.ts'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import type { ActivityMetrics } from '../types/activity.ts'
 
-const INITIAL_METRICS: ActivityMetrics = {
-  keystrokesPerMinute: 0,
-  clicksPerMinute: 0,
-  totalKeystrokes: 0,
-  totalClicks: 0,
-  lastActiveTimestamp: Date.now(),
-  isActive: false,
-  sessionDurationSeconds: 0,
-  sampleTimestamp: Date.now(),
-}
-
-export interface UseActivityTrackerOptions {
-  /** Whether tracking should start automatically on mount (default: true) */
-  autoStart?: boolean
-  /** Idle threshold in milliseconds to consider user inactive (default: 15000ms / 15s) */
-  idleThresholdMs?: number
-  /** Callback invoked on every metrics update */
-  onUpdate?: (metrics: ActivityMetrics) => void
+function emptyMetrics(startedAt: number | null = null): ActivityMetrics {
+  return { keyPressCount: 0, mouseClickCount: 0, startedAt, elapsedSeconds: 0 }
 }
 
 export interface UseActivityTrackerReturn {
-  /** Real-time metrics snapshot */
   metrics: ActivityMetrics
-  /** Shorthand: Keystrokes per minute (rolling 60s) */
-  kpm: number
-  /** Shorthand: Clicks per minute (rolling 60s) */
-  cpm: number
-  /** Whether the tracker is actively recording */
   isTracking: boolean
-  /** Whether running inside Electron desktop environment with native global tracking */
-  isElectron: boolean
-  /** Start or resume activity tracking */
-  start: () => Promise<void>
-  /** Stop or pause activity tracking */
-  stop: () => Promise<void>
-  /** Reset session counters and sliding window */
-  reset: () => Promise<void>
+  start: () => void
+  stop: () => ActivityMetrics | null
+  reset: () => void
 }
-
-function getElectronTrackerAPI(): ActivityTrackerAPI | undefined {
-  if (typeof window === 'undefined') return undefined
-  return window.electron?.activityTracker ?? window.api?.activityTracker
-}
-
-function checkIsElectron(): boolean {
-  return typeof window !== 'undefined' && Boolean(getElectronTrackerAPI())
-}
-
-const emptySubscribe = () => () => {}
 
 /**
- * Custom React hook for subscribing to background keyboard and mouse activity metrics.
- * 
- * In Electron: Connects to the main process via IPC exposed in preload (window.electron.activityTracker).
- * In Browser (Vite dev): Gracefully falls back to window-level events so UI development works seamlessly.
+ * Opt-in, tab-scoped tracking. The key handler counts keydown events without
+ * inspecting event properties; the mouse handler counts primary mouse clicks
+ * without reading targets, coordinates, or other event contents.
  */
-export function useActivityTracker(options: UseActivityTrackerOptions = {}): UseActivityTrackerReturn {
-  const { autoStart = true, idleThresholdMs = 15000, onUpdate } = options
+export function useActivityTracker(): UseActivityTrackerReturn {
+  const [metrics, setMetrics] = useState<ActivityMetrics>(() => emptyMetrics())
+  const [isTracking, setIsTracking] = useState(false)
+  const startedAtRef = useRef<number | null>(null)
+  const metricsRef = useRef(metrics)
 
-  const [metrics, setMetrics] = useState<ActivityMetrics>(INITIAL_METRICS)
-  const [isTracking, setIsTracking] = useState<boolean>(autoStart)
-
-  // Derived synchronously without triggering cascading render effects
-  const isElectron = useSyncExternalStore(emptySubscribe, checkIsElectron, () => false)
-
-  const onUpdateRef = useRef(onUpdate)
-  useEffect(() => {
-    onUpdateRef.current = onUpdate
-  }, [onUpdate])
-
-  // Start tracking
-  const start = useCallback(async () => {
-    const api = getElectronTrackerAPI()
-    if (api) {
-      await api.startTracking()
-    }
+  const start = useCallback(() => {
+    const startedAt = Date.now()
+    const nextMetrics = emptyMetrics(startedAt)
+    startedAtRef.current = startedAt
+    metricsRef.current = nextMetrics
+    setMetrics(nextMetrics)
     setIsTracking(true)
   }, [])
 
-  // Stop tracking
-  const stop = useCallback(async () => {
-    const api = getElectronTrackerAPI()
-    if (api) {
-      await api.stopTracking()
-    }
+  const stop = useCallback(() => {
+    const startedAt = startedAtRef.current
+    if (startedAt === null) return null
+    const finalMetrics = { ...metricsRef.current, startedAt, elapsedSeconds: Math.floor((Date.now() - startedAt) / 1000) }
+    metricsRef.current = finalMetrics
+    setMetrics(finalMetrics)
+    startedAtRef.current = null
     setIsTracking(false)
+    return finalMetrics
   }, [])
 
-  // Reset tracking
-  const reset = useCallback(async () => {
-    const api = getElectronTrackerAPI()
-    if (api) {
-      await api.resetMetrics()
-    }
-    setMetrics({
-      ...INITIAL_METRICS,
-      lastActiveTimestamp: Date.now(),
-      sampleTimestamp: Date.now(),
-    })
+  const reset = useCallback(() => {
+    if (startedAtRef.current !== null) return
+    const nextMetrics = emptyMetrics()
+    metricsRef.current = nextMetrics
+    setMetrics(nextMetrics)
   }, [])
 
   useEffect(() => {
-    const api = getElectronTrackerAPI()
-
-    if (api) {
-      // 1. Fetch initial snapshot
-      api.getMetrics().then((initial) => {
-        if (initial) {
-          setMetrics(initial)
-          onUpdateRef.current?.(initial)
-        }
-      }).catch((err) => {
-        console.warn('[ActivityTracker] Failed to get initial metrics:', err)
-      })
-
-      // 2. Subscribe to real-time IPC updates from Electron main process
-      const unsubscribe = api.onActivityUpdate((newMetrics) => {
-        setMetrics(newMetrics)
-        onUpdateRef.current?.(newMetrics)
-      })
-
-      if (autoStart) {
-        api.startTracking().catch(console.error)
-      }
-
-      return () => {
-        unsubscribe()
-      }
-    }
-
-    // --- Browser Fallback Mode (For Vite development outside Electron) ---
     if (!isTracking) return
 
-    const keyTimestamps: number[] = []
-    const clickTimestamps: number[] = []
-    let totalKeys = 0
-    let totalClicks = 0
-    let lastActive = Date.now()
-    const sessionStart = Date.now()
-
-    const onKeyDown = () => {
-      const now = Date.now()
-      keyTimestamps.push(now)
-      totalKeys += 1
-      lastActive = now
+    const countKeyPress = () => {
+      if (startedAtRef.current === null) return
+      if (document.visibilityState !== 'visible') return
+      const nextMetrics = { ...metricsRef.current, keyPressCount: metricsRef.current.keyPressCount + 1 }
+      metricsRef.current = nextMetrics
+      setMetrics(nextMetrics)
     }
 
-    const onMouseDown = () => {
-      const now = Date.now()
-      clickTimestamps.push(now)
-      totalClicks += 1
-      lastActive = now
+    const countMouseClick = (event: MouseEvent) => {
+      if (startedAtRef.current === null) return
+      if (typeof PointerEvent === 'undefined' || !(event instanceof PointerEvent)) return
+      if (event.pointerType !== 'mouse' || event.button !== 0) return
+      if (document.visibilityState !== 'visible') return
+      const nextMetrics = { ...metricsRef.current, mouseClickCount: metricsRef.current.mouseClickCount + 1 }
+      metricsRef.current = nextMetrics
+      setMetrics(nextMetrics)
     }
-
-    window.addEventListener('keydown', onKeyDown, { passive: true })
-    window.addEventListener('mousedown', onMouseDown, { passive: true })
 
     const interval = window.setInterval(() => {
-      const now = Date.now()
-      const windowStart = now - 60000
-
-      while (keyTimestamps.length > 0 && keyTimestamps[0] < windowStart) {
-        keyTimestamps.shift()
-      }
-      while (clickTimestamps.length > 0 && clickTimestamps[0] < windowStart) {
-        clickTimestamps.shift()
-      }
-
-      const updated: ActivityMetrics = {
-        keystrokesPerMinute: keyTimestamps.length,
-        clicksPerMinute: clickTimestamps.length,
-        totalKeystrokes: totalKeys,
-        totalClicks: totalClicks,
-        lastActiveTimestamp: lastActive,
-        isActive: now - lastActive < idleThresholdMs,
-        sessionDurationSeconds: Math.floor((now - sessionStart) / 1000),
-        sampleTimestamp: now,
-      }
-
-      setMetrics(updated)
-      onUpdateRef.current?.(updated)
+      const startedAt = startedAtRef.current
+      if (startedAt === null) return
+      const nextMetrics = { ...metricsRef.current, elapsedSeconds: Math.floor((Date.now() - startedAt) / 1000) }
+      metricsRef.current = nextMetrics
+      setMetrics(nextMetrics)
     }, 1000)
 
-    return () => {
-      window.removeEventListener('keydown', onKeyDown)
-      window.removeEventListener('mousedown', onMouseDown)
-      window.clearInterval(interval)
-    }
-  }, [autoStart, isTracking, idleThresholdMs])
+    window.addEventListener('keydown', countKeyPress)
+    window.addEventListener('click', countMouseClick)
 
-  return {
-    metrics,
-    kpm: metrics.keystrokesPerMinute,
-    cpm: metrics.clicksPerMinute,
-    isTracking,
-    isElectron,
-    start,
-    stop,
-    reset,
-  }
+    return () => {
+      window.clearInterval(interval)
+      window.removeEventListener('keydown', countKeyPress)
+      window.removeEventListener('click', countMouseClick)
+    }
+  }, [isTracking])
+
+  return { metrics, isTracking, start, stop, reset }
 }

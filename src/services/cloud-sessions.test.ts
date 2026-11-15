@@ -1,6 +1,8 @@
 import { mapDbSessionToSavedSession } from './cloud-sessions.ts'
-import { backupGuestData, restoreGuestData, saveAppData } from './storage.ts'
-import type { AppData } from './app-state.ts'
+import { loadLocalBrowserActivitySessions, preserveLocalBrowserActivitySession } from './browser-activity.ts'
+import { selectDashboardCfiState } from './cfi-display.ts'
+import { backupGuestData, loadAppData, restoreGuestData, saveAppData } from './storage.ts'
+import type { AppData, CheckInRecord } from './app-state.ts'
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) {
@@ -58,9 +60,53 @@ async function runTests() {
     assertEqual(session.cfiScore, 42, 'cfiScore must match')
     assertEqual(session.cfiRiskLevel, 'moderate', 'Risk level must match')
     assert(Array.isArray(session.cfiExplanation) && session.cfiExplanation.length === 2, 'Explanations must be present')
+    assertEqual(session.cfiExplanation?.[0], 'Moderate fatigue detected', 'Historical explanation must load unchanged')
     assert(Array.isArray(session.cfiRecommendations) && session.cfiRecommendations.length === 1, 'Recommendations must be present')
     passed++
     console.log('✓ PASS: mapDbSessionToSavedSession correctly transforms joined Supabase session & CFI rows')
+  }
+
+  // Test 1b: Unified CFI explanation persisted in cfi_results maps back after cloud refresh
+  {
+    const explanation = [
+      'Unified CFI: 54/100 (moderate descriptive band).',
+      'Subjective fatigue indicator: 60/100 from 2/2 responses.',
+      'rmssd individual reading (watch-alpha; ms): 37 ms; personal baseline from 14 valid daily readings.',
+      'Browser activity context only (0% scoring weight): 300 seconds.',
+    ]
+    const session = mapDbSessionToSavedSession({
+      id: 'unified-refresh-session',
+      user_id: 'user-unified',
+      mode: 'student',
+      title: 'Focus session',
+      subject: '',
+      project: '',
+      category: 'Work',
+      description: '',
+      goal: '',
+      focus_minutes: 45,
+      break_minutes: 10,
+      sleep_hours: 0,
+      perceived_fatigue: 1,
+      completed: true,
+      feeling: 'Not recorded',
+      session_date: '2026-11-15T10:00:00.000Z',
+      cfi_results: {
+        session_id: 'unified-refresh-session',
+        user_id: 'user-unified',
+        score: 54,
+        risk_level: 'moderate',
+        explanation,
+        recommendations: [],
+      },
+    })
+    assertEqual(session.cfiScore, 54, 'Unified score reloads from existing cfi_results score field')
+    assertEqual(JSON.stringify(session.cfiExplanation), JSON.stringify(explanation), 'Contributions and context reload unchanged')
+    const display = selectDashboardCfiState([session])
+    assertEqual(display.status, 'scored', 'Refreshed unified session remains displayable')
+    assertEqual(display.sections.activity.length, 1, 'Refreshed browser context remains separate')
+    passed++
+    console.log('✓ PASS: Unified CFI score and explanation survive cloud refresh through existing cfi_results columns')
   }
 
   // Test 2: mapDbSessionToSavedSession handles missing CFI (pending state)
@@ -145,7 +191,31 @@ async function runTests() {
       tasks: [],
       projects: [],
       workLogs: [],
+      checkIns: [],
+      legacyDailyCheckIns: [],
     }
+
+    const guestCheckIn: CheckInRecord = {
+      id: 'guest-morning-check-in',
+      period: 'morning',
+      date: '2026-11-14',
+      recordedAt: '2026-11-14T08:00:00.000Z',
+      schemaVersion: 1,
+      answers: { energy: 3, sleepQuality: 4, mood: 'neutral', readiness: 3, pace: 'steady' },
+    }
+    guestData.checkIns = [guestCheckIn]
+
+    const legacyCheckIn = {
+      id: 'legacy-check-in',
+      recordedAt: new Date().toISOString(),
+      sleepHours: 7.5,
+      fatigue: 4,
+      note: 'Previously saved reflection',
+    }
+    storageStore.set('burnout-radarr-demo-v1', JSON.stringify({ ...guestData, checkIns: [legacyCheckIn] }))
+    const migratedData = loadAppData()
+    assertEqual(migratedData.checkIns.length, 0, 'Legacy single-form check-ins are not treated as morning/evening entries')
+    assertEqual(migratedData.legacyDailyCheckIns[0]?.id, legacyCheckIn.id, 'Legacy check-in data is preserved during migration')
 
     // Save as guest data
     saveAppData(guestData)
@@ -156,6 +226,7 @@ async function runTests() {
       ...guestData,
       preferences: { ...guestData.preferences, name: 'Cloud User' },
       sessions: [],
+      checkIns: [],
     })
 
     // Now restore guest data (simulating logout)
@@ -163,14 +234,52 @@ async function runTests() {
     assertEqual(restored.preferences.name, 'Guest User', 'Guest name must be restored on logout')
     assertEqual(restored.sessions.length, 1, 'Guest sessions must be restored intact on logout')
     assertEqual(restored.sessions[0].id, 'guest-1', 'Guest session ID preserved')
+    assertEqual(restored.checkIns[0]?.id, guestCheckIn.id, 'Guest check-ins must remain separate from cloud check-ins and restore intact')
 
     // Clean up
     if (originalWindow) globalThis.window = originalWindow
+    else Reflect.deleteProperty(globalThis, 'window')
     passed++
     console.log('✓ PASS: LocalStorage backup and restore preserve local workspace and offline sessions across auth cycles')
   }
 
-  console.log(`\nResults: ${passed}/3 cloud session and storage fallback tests passed.`)
+  // Test 4: Opt-in activity fallback is retained locally without an account association
+  {
+    const storageStore = new Map<string, string>()
+    const originalWindow = globalThis.window
+    globalThis.window = {
+      localStorage: {
+        getItem: (key: string) => storageStore.get(key) ?? null,
+        setItem: (key: string, value: string) => storageStore.set(key, value),
+        removeItem: (key: string) => storageStore.delete(key),
+        clear: () => storageStore.clear(),
+        key: () => null,
+        length: storageStore.size,
+      },
+    } as unknown as Window & typeof globalThis
+
+    const localActivity = {
+      id: 'local-activity-1',
+      source: 'browser-tab' as const,
+      startedAt: '2026-11-14T08:00:00.000Z',
+      endedAt: '2026-11-14T08:05:00.000Z',
+      durationSeconds: 300,
+      keyPressCount: 18,
+      mouseClickCount: 7,
+      savedAt: '2026-11-14T08:05:00.000Z',
+    }
+    assert(preserveLocalBrowserActivitySession(localActivity), 'Local activity fallback should be stored')
+    const restoredActivity = loadLocalBrowserActivitySessions()[0]
+    assertEqual(restoredActivity?.id, localActivity.id, 'Local activity session should be retained')
+    assert(!restoredActivity || !('userId' in restoredActivity), 'Local activity session must not be assigned to an account')
+
+    if (originalWindow) globalThis.window = originalWindow
+    else Reflect.deleteProperty(globalThis, 'window')
+    passed++
+    console.log('✓ PASS: Offline activity aggregates remain local and unlinked to any account')
+  }
+
+  console.log(`\nResults: ${passed}/5 cloud session and storage fallback tests passed.`)
 }
 
 runTests().catch((err) => {
