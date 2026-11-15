@@ -145,11 +145,8 @@ flowchart TD
 
 #### 1. Session Duration Fatigue Penalty
 Reflecting empirical findings that fatigue accelerates non-linearly past 4 hours and spikes past 6 hours:
-$$\text{Duration Factor} = \begin{cases} 
-1.0 \times \text{Hours} & \text{if Hours} \le 4 \\
-4.0 + 1.5 \times (\text{Hours} - 4) & \text{if } 4 < \text{Hours} \le 6 \\
-7.0 + 2.5 \times (\text{Hours} - 6) & \text{if Hours} > 6 
-\end{cases}$$
+$$\text{Duration Factor} = \begin{cases} 1.0 \times \text{Hours} & \text{if Hours} \le 4 \\ 4.0 + 1.5 \times (\text{Hours} - 4) & \text{if } 4 < \text{Hours} \le 6 \\ 7.0 + 2.5 \times (\text{Hours} - 6) & \text{if Hours} > 6 \end{cases}$$
+
 
 #### 2. Robust Biometric Deviation (MAD Normalization)
 Individual HRV varies widely between people (20ms to 120ms+), rendering fixed thresholds meaningless. We calculate standardized deficits using the **Median Absolute Deviation (MAD)** against a rolling 14–28 day personal baseline:
