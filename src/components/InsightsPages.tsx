@@ -86,7 +86,7 @@ export function HistoryPage({ sessions, onOpenSession }: { sessions: SavedSessio
     return true
   }).sort((a, b) => b.sessionDate.localeCompare(a.sessionDate))
 
-  return <div className="content-page">
+  return <div className="content-page mt-8">
     <div className="page-title-row"><div><span className="eyebrow">THE NOTES YOU LEFT YOURSELF</span><h1>Focus sessions</h1><p>A clear-eyed look back, without a scorecard.</p></div><button type="button" className="button-secondary" onClick={() => exportSessions(filtered)}><ArrowDownToLine size={16} /> Export CSV</button></div>
     <section className="panel history-panel">
       <div className="history-filters">

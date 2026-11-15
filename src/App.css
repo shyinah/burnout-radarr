@@ -1997,3 +1997,9 @@ button { -webkit-tap-highlight-color: transparent; }
   .auth-editorial-index li { font-size: 10px; }
   .auth-paper-note { margin-left: 2%; }
 }
+
+/* Utility Spacing Classes */
+.mt-8 { margin-top: 2rem; }
+.mt-10 { margin-top: 2.5rem; }
+.mt-12 { margin-top: 3rem; }
+
