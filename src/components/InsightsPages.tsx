@@ -176,8 +176,28 @@ export function SettingsPage({ preferences, sessions, user, onChange, onResetSet
   onOpenAuth?: () => void
   onSignOut?: () => void
 }) {
+  const [savedSettings, setSavedSettings] = useState<AppPreferences>(preferences)
+  const draftSettings = preferences
+
+  const hasChanges = Boolean(
+    savedSettings && (
+      draftSettings.name !== savedSettings.name ||
+      draftSettings.defaultMode !== savedSettings.defaultMode ||
+      draftSettings.theme !== savedSettings.theme ||
+      draftSettings.focusMinutes !== savedSettings.focusMinutes ||
+      draftSettings.breakMinutes !== savedSettings.breakMinutes ||
+      draftSettings.breakReminders !== savedSettings.breakReminders ||
+      draftSettings.notifications !== savedSettings.notifications
+    )
+  )
+
+  const handleSave = () => {
+    onSave()
+    setSavedSettings(preferences)
+  }
+
   return <div className="content-page">
-    <div className="page-title-row"><div><span className="eyebrow">MAKE THIS SPACE YOURS</span><h1>Settings</h1><p>Your preferences stay on this device.</p></div><button className="button-primary settings-save" type="button" onClick={onSave}><Check size={16} /> Save settings</button></div>
+    <div className="page-title-row"><div><span className="eyebrow">MAKE THIS SPACE YOURS</span><h1>Settings</h1><p>Your preferences stay on this device.</p></div>{hasChanges && <button className="button-primary settings-save" type="button" onClick={handleSave}><Check size={16} /> Save settings</button>}</div>
     <div className="settings-layout">
       <div className="settings-main">
         <section className="panel settings-section"><div className="settings-section-title"><span className="settings-icon"><Heart size={17} /></span><div><h2>Your profile</h2><p>Just for a more personal hello.</p></div></div><label className="field-label">Name<input value={preferences.name} maxLength={32} onChange={(event) => onChange({ name: event.target.value })} /></label></section>
