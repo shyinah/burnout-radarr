@@ -216,9 +216,9 @@ export function CheckInPage({ userId, guestRecords }: { userId: string; guestRec
         <div className="check-in-period-heading"><span className="check-in-period-icon"><PeriodIcon size={18} /></span><div><h2>{periodCopy[period].title}</h2><p>{periodCopy[period].description} · {displayDate(today)}</p></div></div>
 
         {existingToday ? (
-          <div className="check-in-submitted-notice" role="status">
-            <Check size={16} />
-            <span>This check-in is already saved to your account for today. You can review your answers below; another response cannot be submitted for this check-in and date.</span>
+          <div className="check-in-submitted-notice bg-emerald-50 text-emerald-800 dark:bg-emerald-950/30 dark:border-emerald-900/50" role="status">
+            <Check size={16} className="text-emerald-600 dark:text-emerald-400" />
+            <span className="dark:text-emerald-300">This check-in is already saved to your account for today. You can review your answers below; another response cannot be submitted for this check-in and date.</span>
           </div>
         ) : !isCurrentPeriodAvailable ? (
           <div className="check-in-locked-notice" role="status">

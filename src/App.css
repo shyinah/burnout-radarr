@@ -200,6 +200,20 @@ button { -webkit-tap-highlight-color: transparent; }
 .check-in-period-tab.is-locked:not([aria-selected="true"]) { opacity: .78; }
 .check-in-submitted-notice { display: flex; align-items: flex-start; gap: 8px; padding: 12px; border: 1px solid color-mix(in srgb, #77a47a 35%, var(--line)); border-radius: 11px; color: #547a59; background: color-mix(in srgb, #e6efe5 45%, var(--surface)); font-size: 9px; line-height: 1.55; }
 .check-in-submitted-notice > svg { flex: 0 0 auto; }
+.app-shell[data-theme="dark"] .check-in-submitted-notice,
+.app-shell[data-theme="dark"] .dark\:bg-emerald-950\/30 {
+  background-color: rgba(6, 78, 59, 0.3) !important;
+  border-color: rgba(6, 95, 70, 0.5) !important;
+  color: #6ee7b7 !important;
+}
+.app-shell[data-theme="dark"] .check-in-submitted-notice > svg,
+.app-shell[data-theme="dark"] .dark\:text-emerald-400 {
+  color: #34d399 !important;
+}
+.app-shell[data-theme="dark"] .check-in-submitted-notice span,
+.app-shell[data-theme="dark"] .dark\:text-emerald-300 {
+  color: #6ee7b7 !important;
+}
 .check-in-locked-notice { display: flex; align-items: flex-start; gap: 11px; padding: 13px 15px; border: 1px solid color-mix(in srgb, var(--accent-strong) 24%, var(--line)); border-radius: 11px; color: var(--ink-2); background: color-mix(in srgb, var(--accent-soft) 42%, var(--surface)); font-size: 9px; line-height: 1.55; }
 .check-in-locked-icon { display: grid; flex: 0 0 32px; place-items: center; width: 32px; height: 32px; border-radius: 9px; color: var(--accent-ink); background: var(--accent-soft); }
 .check-in-locked-body { flex: 1; min-width: 0; }
