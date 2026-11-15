@@ -315,6 +315,20 @@ button { -webkit-tap-highlight-color: transparent; }
 .wearable-activity-limitation > svg { flex: 0 0 auto; margin-top: 1px; }
 .wearable-activity-limitation strong { color: var(--ink-2); font-size: 9px; }
 .wearable-activity-limitation p { margin: 3px 0 0; color: var(--muted); font-size: 8px; line-height: 1.5; }
+.app-shell[data-theme="dark"] .wearable-activity-limitation,
+.app-shell[data-theme="dark"] .dark\:bg-stone-900 {
+  background: var(--surface);
+  border-color: var(--line);
+  color: var(--accent-warm);
+}
+.app-shell[data-theme="dark"] .wearable-activity-limitation strong,
+.app-shell[data-theme="dark"] .dark\:text-stone-200 {
+  color: var(--ink);
+}
+.app-shell[data-theme="dark"] .wearable-activity-limitation p,
+.app-shell[data-theme="dark"] .dark\:text-stone-400 {
+  color: var(--muted);
+}
 .wearable-source-note { display: grid; gap: 4px; margin-top: 15px; padding: 2px 2px 0; }
 .wearable-source-note strong { color: var(--ink-2); font-size: 9px; }
 .wearable-source-note p { max-width: 1000px; margin: 0; color: var(--muted); font-size: 8px; line-height: 1.65; }

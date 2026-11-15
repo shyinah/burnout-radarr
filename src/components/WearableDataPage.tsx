@@ -293,7 +293,7 @@ export function WearableDataPage({ userId }: { userId: string }) {
           <p className="wearable-history-note">Each value is a daily cohort median. “n” is the number of valid source contributors for that metric; missing values are left unavailable.</p>
         </section>
 
-        <div className="wearable-activity-limitation"><Footprints size={18} /><div><strong>Activity data is not summarized</strong><p>Step readings in the source are too sparse for a representative daily trend. No missing activity values have been filled or estimated.</p></div></div>
+        <div className="panel wearable-activity-limitation dark:bg-stone-900 dark:border-stone-700"><Footprints size={18} /><div><strong className="text-stone-800 dark:text-stone-200">Activity data is not summarized</strong><p className="text-stone-600 dark:text-stone-400">Step readings in the source are too sparse for a representative daily trend. No missing activity values have been filled or estimated.</p></div></div>
         <section className="wearable-source-note"><strong>About this research data</strong><p>{researchSourceName}. No participant IDs or raw participant rows are displayed. Heart rate uses bpm; sleep duration, time in bed, and latency use hours; WASO uses minutes; efficiency is a ratio shown as a percentage. RMSSD units are unspecified by the source documentation.</p></section>
         {(extraction.excluded.invalidDateRows > 0 || extraction.excluded.duplicateDateGroups > 0) && <p className="wearable-source-note">Some source rows were excluded due to invalid or duplicate dates.</p>}
       </>}
