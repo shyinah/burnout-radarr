@@ -1613,6 +1613,36 @@ button { -webkit-tap-highlight-color: transparent; }
 .stat-card.peach .stat-icon { color: #80613c; background: #eee7d8; }
 .stat-card.sage .stat-icon { color: #536448; background: #e3e9dc; }
 .stat-card.blue .stat-icon { color: #526b77; background: #e3e9e9; }
+.app-shell[data-theme="dark"] .stat-card.peach .stat-icon,
+.app-shell[data-theme="dark"] .dark\:bg-amber-900\/20 {
+  background-color: rgba(120, 53, 15, 0.25) !important;
+  color: #fcd34d !important;
+}
+.app-shell[data-theme="dark"] .stat-card.sage .stat-icon,
+.app-shell[data-theme="dark"] .dark\:bg-emerald-900\/20 {
+  background-color: rgba(6, 78, 59, 0.25) !important;
+  color: #6ee7b7 !important;
+}
+.app-shell[data-theme="dark"] .stat-card.blue .stat-icon,
+.app-shell[data-theme="dark"] .dark\:bg-sky-900\/20 {
+  background-color: rgba(12, 74, 110, 0.25) !important;
+  color: #7dd3fc !important;
+}
+.app-shell[data-theme="dark"] .dark\:bg-stone-800\/50 {
+  background-color: rgba(41, 37, 36, 0.5) !important;
+}
+.app-shell[data-theme="dark"] .dark\:text-stone-300 {
+  color: #d6d3d1 !important;
+}
+.app-shell[data-theme="dark"] .dark\:text-amber-300 {
+  color: #fcd34d !important;
+}
+.app-shell[data-theme="dark"] .dark\:text-emerald-300 {
+  color: #6ee7b7 !important;
+}
+.app-shell[data-theme="dark"] .dark\:text-sky-300 {
+  color: #7dd3fc !important;
+}
 .stat-label { color: var(--ink-2); font-size: 12px; }
 .stat-value { margin-top: 4px; font-size: 25px; }
 .stat-note { font-size: 10px; }

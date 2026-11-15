@@ -111,8 +111,8 @@ function SessionRow({ session }: { session: SavedSession }) {
   return <div className="session-row"><span className="session-avatar"><Clock3 size={15} /></span><span className="session-info"><strong>{session.title}</strong><small>{session.subject || session.project || session.category} <span>·</span> {dateLabel(session.sessionDate)}</small></span><span className="session-duration">{session.focusMinutes}m</span>{session.pendingCFI ? <span className="pending-score">Pending</span> : <span className="session-score">{session.cfiScore}</span>}</div>
 }
 
-function StatCard({ icon: Icon, label, value, note, tone }: { icon: typeof Clock3; label: string; value: string; note: string; tone: string }) {
-  return <div className={`stat-card ${tone}`}><span className="stat-icon"><Icon size={17} strokeWidth={1.9} /></span><span className="stat-label">{label}</span><strong className="stat-value">{value}</strong><span className="stat-note">{note}</span></div>
+function StatCard({ icon: Icon, label, value, note, tone, iconClassName }: { icon: typeof Clock3; label: string; value: string; note: string; tone: string; iconClassName?: string }) {
+  return <div className={`stat-card ${tone}`}><span className={`stat-icon${iconClassName ? ` ${iconClassName}` : ''}`}><Icon size={17} strokeWidth={1.9} /></span><span className="stat-label">{label}</span><strong className="stat-value">{value}</strong><span className="stat-note">{note}</span></div>
 }
 
 function TaskPreview({ tasks, onToggle, onAdd, onEdit, onDelete }: { tasks: StudyTask[]; onToggle: (id: string) => void; onAdd: () => void; onEdit: (task: StudyTask) => void; onDelete: (task: StudyTask) => void }) {
@@ -240,7 +240,12 @@ export function Dashboard(props: DashboardProps) {
   return <div className="dashboard-page overview-page">
     <div className="page-title-row"><div><span className="eyebrow">YOUR PERSONAL RADARR</span><h1>Your week, in focus.</h1><p>Notice your rhythm, then make space for what you need.</p></div><span className="live-date"><span className="live-date-dot" /> {new Date().toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}</span></div>
     <section className="overview-hero"><div><span className="hero-kicker"><Sparkles size={13} /> YOUR WEEK, AT A GLANCE</span><h2>Welcome back, {name}.</h2><p>{greeting} Where would you like to begin?</p><div className="unified-hero-actions"><button className="button-primary" type="button" onClick={onStart}><Timer size={16} /> Start a focus session <ArrowRight size={15} /></button><button className="button-secondary" type="button" onClick={() => onNavigate('check-in')}>Daily check-in</button></div></div><div className="overview-orb" aria-hidden="true"><span className="orb-ring" /><span className="orb-center"><ActivityChart data={weekData} compact /></span><span className="orb-caption">YOUR RHYTHM</span></div></section>
-    <div className="stat-grid overview-stat-grid"><StatCard icon={Clock3} label="Focused today" value={durationLabel(focusToday)} note="time well spent" tone="lavender" /><StatCard icon={Timer} label="Sessions today" value={String(todaySessions.length)} note="small steps count" tone="peach" /><StatCard icon={TrendingUp} label="This week" value={durationLabel(weekFocus)} note="focused minutes" tone="sage" /><StatCard icon={Heart} label="Average session" value={average ? `${average}m` : '—'} note="across your journal" tone="blue" /></div>
+    <div className="stat-grid overview-stat-grid">
+      <StatCard icon={Clock3} label="Focused today" value={durationLabel(focusToday)} note="time well spent" tone="lavender" iconClassName="dark:bg-stone-800/50 dark:text-stone-300" />
+      <StatCard icon={Timer} label="Sessions today" value={String(todaySessions.length)} note="small steps count" tone="peach" iconClassName="dark:bg-amber-900/20 dark:text-amber-300" />
+      <StatCard icon={TrendingUp} label="This week" value={durationLabel(weekFocus)} note="focused minutes" tone="sage" iconClassName="dark:bg-emerald-900/20 dark:text-emerald-300" />
+      <StatCard icon={Heart} label="Average session" value={average ? `${average}m` : '—'} note="across your journal" tone="blue" iconClassName="dark:bg-sky-900/20 dark:text-sky-300" />
+    </div>
     <div className="dashboard-grid overview-grid">
       <section className="panel activity-panel"><div className="panel-heading"><div><span className="eyebrow">THE LAST 7 DAYS</span><h2>Your activity</h2></div><button type="button" className="text-action" onClick={() => onNavigate('activity')}>View activity <ArrowRight size={14} /></button></div><ActivityChart data={weekData} /></section>
       <CfiCard sessions={sessions} />
