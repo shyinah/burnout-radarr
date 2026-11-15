@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { Check, ClipboardCheck, MoonStar, Sun } from 'lucide-react'
+import { Check, ClipboardCheck, Clock, Lock, MoonStar, Sparkles, Sun } from 'lucide-react'
 import type { CheckInAnswerValue, CheckInPeriod, CheckInRecord } from '../services/app-state'
 import { checkInQuestions as questionSets, type CheckInQuestion } from '../services/check-in-questions.ts'
 import { fetchCheckInsForCurrentUser, saveCheckInForCurrentUser, type PersistedCheckIn } from '../services/check-ins.ts'
+
+const EVENING_START_HOUR = 18
 
 const periodCopy: Record<CheckInPeriod, { title: string; description: string }> = {
   morning: { title: 'Morning check-in', description: 'A quick read on how you are starting the day.' },
@@ -25,7 +27,8 @@ function answerLabel(question: CheckInQuestion | undefined, answer: CheckInAnswe
 }
 
 export function CheckInPage({ userId, guestRecords }: { userId: string; guestRecords: CheckInRecord[] }) {
-  const [period, setPeriod] = useState<CheckInPeriod>(() => new Date().getHours() < 12 ? 'morning' : 'evening')
+  const [currentHour, setCurrentHour] = useState(() => new Date().getHours())
+  const [period, setPeriod] = useState<CheckInPeriod>(() => new Date().getHours() >= EVENING_START_HOUR ? 'evening' : 'morning')
   const [today, setToday] = useState(localDateKey)
   const [answersByPeriod, setAnswersByPeriod] = useState<Record<CheckInPeriod, Record<string, CheckInAnswerValue>>>({ morning: {}, evening: {} })
   const [cloudRecords, setCloudRecords] = useState<PersistedCheckIn[]>([])
@@ -38,7 +41,10 @@ export function CheckInPage({ userId, guestRecords }: { userId: string; guestRec
   const submittingKey = useRef<string | null>(null)
 
   useEffect(() => {
-    const interval = window.setInterval(() => setToday(localDateKey()), 60_000)
+    const interval = window.setInterval(() => {
+      setToday(localDateKey())
+      setCurrentHour(new Date().getHours())
+    }, 60_000)
     return () => window.clearInterval(interval)
   }, [])
 
@@ -78,6 +84,9 @@ export function CheckInPage({ userId, guestRecords }: { userId: string; guestRec
     .sort((a, b) => b.date.localeCompare(a.date) || b.recordedAt.localeCompare(a.recordedAt))
     .slice(0, 7)
   const complete = questions.every((question) => question.options.some((option) => option.value === answers[question.id]))
+  const isEveningAvailable = currentHour >= EVENING_START_HOUR
+  const isMorningAvailable = currentHour < EVENING_START_HOUR
+  const isCurrentPeriodAvailable = period === 'evening' ? isEveningAvailable : isMorningAvailable
 
   function selectAnswer(questionId: string, value: CheckInAnswerValue) {
     setAnswersByPeriod((current) => ({ ...current, [period]: { ...current[period], [questionId]: value } }))
@@ -88,6 +97,16 @@ export function CheckInPage({ userId, guestRecords }: { userId: string; guestRec
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (isLoading || isSaving) return
+    if (period === 'evening' && currentHour < EVENING_START_HOUR) {
+      setMessage('Evening check-in is only available after 6:00 PM.')
+      setIsError(true)
+      return
+    }
+    if (period === 'morning' && currentHour >= EVENING_START_HOUR) {
+      setMessage('Morning check-in is closed for today. Please complete your evening check-in.')
+      setIsError(true)
+      return
+    }
     if (existingToday) {
       setMessage('This check-in has already been submitted today. You can review it below.')
       setIsError(true)
@@ -164,8 +183,31 @@ export function CheckInPage({ userId, guestRecords }: { userId: string; guestRec
         {(['morning', 'evening'] as const).map((item) => {
           const ItemIcon = item === 'morning' ? Sun : MoonStar
           const hasSubmitted = cloudRecords.some((record) => record.period === item && record.date === today)
-          return <button key={item} type="button" role="tab" id={`${item}-check-in-tab`} aria-selected={period === item} aria-controls="daily-check-in-panel" className={`check-in-period-tab${period === item ? ' selected' : ''}`} onClick={() => { setPeriod(item); setMessage(''); setIsError(false) }}>
-            <ItemIcon size={16} /><span>{periodCopy[item].title}</span><small>{hasSubmitted ? 'Submitted today' : 'Not submitted'}</small>
+          const isAvailable = item === 'evening' ? isEveningAvailable : isMorningAvailable
+          const statusText = hasSubmitted
+            ? 'Submitted today'
+            : isAvailable
+              ? 'Available now'
+              : item === 'evening'
+                ? 'Opens at 6:00 PM'
+                : 'Closed at 6:00 PM'
+
+          return <button
+            key={item}
+            type="button"
+            role="tab"
+            id={`${item}-check-in-tab`}
+            aria-selected={period === item}
+            aria-controls="daily-check-in-panel"
+            className={`check-in-period-tab${period === item ? ' selected' : ''}${!isAvailable && !hasSubmitted ? ' is-locked' : ''}`}
+            onClick={() => { setPeriod(item); setMessage(''); setIsError(false) }}
+          >
+            <ItemIcon size={16} />
+            <span className="check-in-tab-title">
+              {periodCopy[item].title}
+              {!isAvailable && !hasSubmitted && <Lock size={11} className="check-in-tab-lock" aria-label="Locked" />}
+            </span>
+            <small>{statusText}</small>
           </button>
         })}
       </div>
@@ -173,22 +215,57 @@ export function CheckInPage({ userId, guestRecords }: { userId: string; guestRec
       <div id="daily-check-in-panel" role="tabpanel" aria-labelledby={`${period}-check-in-tab`} className="check-in-period-content">
         <div className="check-in-period-heading"><span className="check-in-period-icon"><PeriodIcon size={18} /></span><div><h2>{periodCopy[period].title}</h2><p>{periodCopy[period].description} · {displayDate(today)}</p></div></div>
 
-        {existingToday ? <div className="check-in-submitted-notice" role="status"><Check size={16} /><span>This check-in is already saved to your account for today. You can review your answers below; another response cannot be submitted for this check-in and date.</span></div> : <form className="check-in-question-form" onSubmit={submit}>
-          <div className="check-in-question-list">
-            {questions.map((question, index) => <fieldset className="check-in-question" key={question.id}>
-              <legend><span>{index + 1}</span><strong>{question.prompt}</strong></legend>
-              {question.type === 'rating' && <span className="check-in-scale-hint">Choose one rating from 1 to 5</span>}
-              <div className="check-in-options">
-                {question.options.map((option) => <label className={`check-in-option${answers[question.id] === option.value ? ' selected' : ''}`} key={String(option.value)}>
-                  <input type="radio" name={`${period}-${question.id}`} value={String(option.value)} checked={answers[question.id] === option.value} onChange={() => selectAnswer(question.id, option.value)} />
-                  <span>{option.label}</span>
-                </label>)}
-              </div>
-            </fieldset>)}
+        {existingToday ? (
+          <div className="check-in-submitted-notice" role="status">
+            <Check size={16} />
+            <span>This check-in is already saved to your account for today. You can review your answers below; another response cannot be submitted for this check-in and date.</span>
           </div>
-          {message && <p className={`check-in-form-message${isError ? ' is-error' : ''}`} role={isError ? 'alert' : 'status'}>{message}</p>}
-          <div className="check-in-submit-row"><p>Exactly five responses · saved to your account after confirmation.</p><button type="submit" className="button-primary" disabled={!complete || isLoading || isSaving}>{isSaving ? 'Saving…' : `Save ${periodCopy[period].title}`}</button></div>
-        </form>}
+        ) : !isCurrentPeriodAvailable ? (
+          <div className="check-in-locked-notice" role="status">
+            <span className="check-in-locked-icon"><Clock size={18} /></span>
+            <div className="check-in-locked-body">
+              <h3>{period === 'evening' ? 'Evening check-in opens at 6:00 PM' : 'Morning check-in closed for today'}</h3>
+              <p>
+                {period === 'evening'
+                  ? 'Take your time through the day. Once 6:00 PM arrives, this space will open for your reflection on how the day went.'
+                  : 'Morning reflections are available earlier in the day (before 6:00 PM). Please switch to your Evening check-in to reflect on how today went.'}
+              </p>
+              <div className="check-in-locked-footer">
+                <span className="check-in-locked-hint">
+                  <Sparkles size={13} /> {period === 'evening' ? 'Evening window: 6:00 PM – Midnight' : 'Morning window: 12:00 AM – 6:00 PM'}
+                </span>
+                <button
+                  type="button"
+                  className="text-action check-in-switch-action"
+                  onClick={() => {
+                    setPeriod(period === 'evening' ? 'morning' : 'evening')
+                    setMessage('')
+                    setIsError(false)
+                  }}
+                >
+                  Switch to {period === 'evening' ? 'Morning' : 'Evening'} check-in &rarr;
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <form className="check-in-question-form" onSubmit={submit}>
+            <div className="check-in-question-list">
+              {questions.map((question, index) => <fieldset className="check-in-question" key={question.id}>
+                <legend><span>{index + 1}</span><strong>{question.prompt}</strong></legend>
+                {question.type === 'rating' && <span className="check-in-scale-hint">Choose one rating from 1 to 5</span>}
+                <div className="check-in-options">
+                  {question.options.map((option) => <label className={`check-in-option${answers[question.id] === option.value ? ' selected' : ''}`} key={String(option.value)}>
+                    <input type="radio" name={`${period}-${question.id}`} value={String(option.value)} checked={answers[question.id] === option.value} onChange={() => selectAnswer(question.id, option.value)} />
+                    <span>{option.label}</span>
+                  </label>)}
+                </div>
+              </fieldset>)}
+            </div>
+            {message && <p className={`check-in-form-message${isError ? ' is-error' : ''}`} role={isError ? 'alert' : 'status'}>{message}</p>}
+            <div className="check-in-submit-row"><p>Exactly five responses · saved to your account after confirmation.</p><button type="submit" className="button-primary" disabled={!complete || isLoading || isSaving}>{isSaving ? 'Saving…' : `Save ${periodCopy[period].title}`}</button></div>
+          </form>
+        )}
 
         {existingToday && message && <p className={`check-in-form-message${isError ? ' is-error' : ''}`} role={isError ? 'alert' : 'status'}>{message}</p>}
 
